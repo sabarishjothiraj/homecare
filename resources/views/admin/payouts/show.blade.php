@@ -1,215 +1,277 @@
 @extends('layouts.admin')
 
-@section('title', 'Payout Details')
+@section('title', 'Payslip #'.$payout->id)
 
 @section('content')
+@php
+    $canManage = auth()->user()->hasPermission('payouts.manage');
+    $editable = $canManage && $payout->isEditable();
+    $employee = $payout->employee;
+    $summary = $payout->attendance_summary ?? [];
+    $statuses = \App\Models\Attendance::STATUSES;
+    $weights = \App\Services\PayrollService::PAYABLE_WEIGHTS[$payout->pay_type ?? 'monthly'] ?? \App\Services\PayrollService::PAYABLE_WEIGHTS['monthly'];
+    $statusTones = ['pending' => 'warning', 'paid' => 'success', 'cancelled' => 'secondary'];
+    $earnings = $payout->items->where('type', 'earning');
+    $deductions = $payout->items->where('type', 'deduction');
+    $days = fn ($value) => rtrim(rtrim(number_format((float) $value, 1), '0'), '.') ?: '0';
+@endphp
 <div class="container-fluid">
-    <!-- Page Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2 class="mb-1">Payout #{{ $payout->id }}</h2>
-            <p class="text-muted mb-0">Payout Details</p>
+    @if($errors->any())
+        <div class="alert alert-danger d-print-none">
+            <ul class="mb-0 ps-3">
+                @foreach($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
         </div>
+    @endif
+
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2 d-print-none">
         <div>
-            @if($payout->status !== 'paid')
-                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#markPaidModal">
-                    <i class="fas fa-check-circle me-2"></i>Mark as Paid
-                </button>
-                <a href="{{ route('admin.payouts.edit', $payout) }}" class="btn btn-warning">
-                    <i class="fas fa-edit me-2"></i>Edit
-                </a>
+            <h2 class="mb-1">Payslip — {{ $payout->periodLabel() }}</h2>
+            <p class="text-muted mb-0">{{ $employee?->getField('name', 'Employee') }} · #{{ $payout->id }}</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <button type="button" class="btn btn-outline-secondary" onclick="window.print()"><i class="fas fa-print me-2"></i>Print</button>
+            @if($editable)
+                <form method="POST" action="{{ route('admin.payouts.recalculate', $payout) }}">
+                    @csrf
+                    <button type="submit" class="btn btn-outline-primary" title="Re-read salary and attendance"><i class="fas fa-sync-alt me-2"></i>Recalculate</button>
+                </form>
             @endif
-            <a href="{{ route('admin.payouts.index') }}" class="btn btn-outline-secondary">
-                <i class="fas fa-arrow-left me-2"></i>Back to List
+            <a href="{{ route('admin.payouts.index', ['month' => $payout->period_start?->format('Y-m')]) }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Payroll
             </a>
         </div>
     </div>
 
-    @if(session('success'))
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-            <i class="fas fa-check-circle me-2"></i>{{ session('success') }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    @endif
-
-    @if(session('error'))
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            <i class="fas fa-exclamation-circle me-2"></i>{{ session('error') }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    @endif
-
     <div class="row g-3">
-        <!-- Payout Information -->
-        <div class="col-md-8">
-            <div class="card border-0 shadow-sm mb-3">
-                <div class="card-header bg-white">
-                    <h5 class="mb-0"><i class="fas fa-money-bill-wave me-2"></i>Payout Information</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="text-muted small">Payout ID</label>
-                            <p class="mb-0"><strong>#{{ $payout->id }}</strong></p>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="text-muted small">Status</label>
-                            <p class="mb-0">
-                                @if($payout->status === 'paid')
-                                    <span class="badge bg-success">Paid</span>
-                                @else
-                                    <span class="badge bg-warning">Pending</span>
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm payslip">
+                <div class="card-body p-4">
+                    <!-- Header -->
+                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 border-bottom pb-3 mb-3">
+                        <div>
+                            <div class="text-muted small text-uppercase">Payslip</div>
+                            <h4 class="mb-1">{{ $employee?->getField('name', 'Employee') }}</h4>
+                            <div class="small text-muted">
+                                {{ $employee?->getField('phone', '') }}
+                                @if($employee?->services?->isNotEmpty())
+                                    · {{ $employee->services->pluck('name')->join(', ') }}
                                 @endif
-                            </p>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="text-muted small">Amount</label>
-                            <p class="mb-0"><strong class="text-success fs-4">₹{{ number_format($payout->amount, 2) }}</strong></p>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="text-muted small">Payout Date</label>
-                            <p class="mb-0"><strong>{{ $payout->period_end ? $payout->period_end->format('M d, Y') : 'N/A' }}</strong></p>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="text-muted small">Payment Method</label>
-                            <p class="mb-0">{{ ucfirst(str_replace('_', ' ', $payout->frequency ?? 'N/A')) }}</p>
-                        </div>
-                        @if($payout->status === 'paid' && $payout->paid_at)
-                        <div class="col-md-6">
-                            <label class="text-muted small">Paid At</label>
-                            <p class="mb-0">{{ $payout->paid_at->format('M d, Y h:i A') }}</p>
-                        </div>
-                        @endif
-                        @if($payout->period_start)
-                        <div class="col-md-6">
-                            <label class="text-muted small">Period Start</label>
-                            <p class="mb-0">{{ $payout->period_start->format('M d, Y') }}</p>
-                        </div>
-                        @endif
-                        @if($payout->period_end)
-                        <div class="col-md-6">
-                            <label class="text-muted small">Period End</label>
-                            <p class="mb-0">{{ $payout->period_end->format('M d, Y') }}</p>
-                        </div>
-                        @endif
-                        <div class="col-md-6">
-                            <label class="text-muted small">Created</label>
-                            <p class="mb-0">{{ $payout->created_at->format('M d, Y h:i A') }}</p>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="text-muted small">Last Updated</label>
-                            <p class="mb-0">{{ $payout->updated_at->diffForHumans() }}</p>
-                        </div>
-                        @if($payout->notes)
-                            <div class="col-12">
-                                <label class="text-muted small">Notes</label>
-                                <p class="mb-0">{{ $payout->notes }}</p>
                             </div>
-                        @endif
+                        </div>
+                        <div class="text-end">
+                            <div class="fw-semibold">{{ $payout->periodLabel() }}</div>
+                            <div class="small text-muted">{{ $payout->period_start?->format('M d') }} – {{ $payout->period_end?->format('M d, Y') }}</div>
+                            <span class="badge bg-{{ $statusTones[$payout->status] ?? 'secondary' }} mt-1">{{ ucfirst($payout->status) }}</span>
+                        </div>
                     </div>
-                </div>
-            </div>
 
-            <!-- Employee Information -->
-            <div class="card border-0 shadow-sm">
-                <div class="card-header bg-white">
-                    <h5 class="mb-0"><i class="fas fa-user-nurse me-2"></i>Employee Information</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="text-muted small">Name</label>
-                            <p class="mb-0"><strong>{{ $payout->employee->getField('name', 'N/A') }}</strong></p>
+                    @if($payout->isEditable() && $payout->shortfall())
+                        <div class="alert alert-danger d-flex align-items-center d-print-none">
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                            <div>
+                                <strong>Deductions exceed earnings by ₹{{ number_format($payout->shortfall(), 2) }}.</strong>
+                                Net pay can't go below ₹0, so that part would never be recovered. Reduce or remove a deduction before paying.
+                            </div>
                         </div>
-                        <div class="col-md-6">
-                            <label class="text-muted small">Phone</label>
-                            <p class="mb-0">{{ $payout->employee->getField('phone', 'N/A') }}</p>
+                    @endif
+
+                    @if(!empty($summary['unmarked']) && $payout->isEditable())
+                        <div class="alert alert-warning d-flex align-items-center d-print-none">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <div>
+                                <strong>{{ $summary['unmarked'] }} {{ Str::plural('day', $summary['unmarked']) }} not marked</strong> and not paid.
+                                <a href="{{ route('admin.attendance.register', ['month' => $payout->period_start?->format('Y-m'), 'search' => $employee?->getField('name', '')]) }}">Mark attendance</a>, then Recalculate.
+                            </div>
                         </div>
-                        <div class="col-md-6">
-                            <label class="text-muted small">Email</label>
-                            <p class="mb-0">{{ $payout->employee->getField('email', 'N/A') }}</p>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="text-muted small">Employee Status</label>
-                            <p class="mb-0">
-                                @if($payout->employee->status === 'active')
-                                    <span class="badge bg-success">Active</span>
-                                @elseif($payout->employee->status === 'pending')
-                                    <span class="badge bg-warning">Pending</span>
-                                @else
-                                    <span class="badge bg-secondary">Inactive</span>
-                                @endif
-                            </p>
-                        </div>
-                        <div class="col-12">
-                            <a href="{{ route('admin.employees.show', $payout->employee) }}" class="btn btn-sm btn-outline-primary">
-                                <i class="fas fa-eye me-1"></i>View Employee Details
-                            </a>
+                    @endif
+
+                    <!-- Attendance -->
+                    <h6 class="text-uppercase text-muted small mb-2">Attendance</h6>
+                    <div class="row g-2 mb-4">
+                        @foreach($statuses as $key => $meta)
+                            <div class="col-4 col-md">
+                                <div class="border rounded text-center py-2 h-100">
+                                    <div class="fs-5 fw-semibold text-{{ $meta['tone'] }}">{{ $summary[$key] ?? 0 }}</div>
+                                    <div class="small text-muted">{{ $meta['label'] }}</div>
+                                    <div class="small text-muted opacity-75">{{ $weights[$key] == 1 ? 'paid' : ($weights[$key] == 0 ? 'unpaid' : '½ paid') }}</div>
+                                </div>
+                            </div>
+                        @endforeach
+                        <div class="col-4 col-md">
+                            <div class="border rounded text-center py-2 h-100 {{ !empty($summary['unmarked']) ? 'border-warning' : '' }}">
+                                <div class="fs-5 fw-semibold {{ !empty($summary['unmarked']) ? 'text-warning' : 'text-muted' }}">{{ $summary['unmarked'] ?? 0 }}</div>
+                                <div class="small text-muted">Not marked</div>
+                                <div class="small text-muted opacity-75">unpaid</div>
+                            </div>
                         </div>
                     </div>
+
+                    <!-- Calculation -->
+                    <h6 class="text-uppercase text-muted small mb-2">Earnings & Deductions</h6>
+                    <table class="table table-sm align-middle mb-0">
+                        <tbody>
+                            <tr>
+                                <td>
+                                    <strong>Basic salary earned</strong>
+                                    <div class="small text-muted">
+                                        @if($payout->pay_type === 'daily')
+                                            {{ $days($payout->payable_days) }} payable days × ₹{{ number_format($payout->rate, 2) }} per day
+                                        @else
+                                            ₹{{ number_format($payout->rate, 0) }} / month ÷ {{ $payout->days_in_period }} days × {{ $days($payout->payable_days) }} payable days
+                                        @endif
+                                        @if($salaryChanges->isNotEmpty())
+                                            <br><i class="fas fa-info-circle me-1"></i>Salary changed this period — each day is paid at the rate in force that day.
+                                        @endif
+                                    </div>
+                                </td>
+                                <td class="text-end text-nowrap fw-semibold">₹{{ number_format($payout->gross_amount, 2) }}</td>
+                                @if($editable)<td style="width: 40px;"></td>@endif
+                            </tr>
+                            @foreach($earnings as $item)
+                                <tr>
+                                    <td><i class="fas fa-plus-circle text-success me-1"></i>{{ $item->label }}</td>
+                                    <td class="text-end text-nowrap text-success">+₹{{ number_format($item->amount, 2) }}</td>
+                                    @if($editable)
+                                        <td class="text-end">
+                                            <form method="POST" action="{{ route('admin.payouts.items.destroy', [$payout, $item]) }}" onsubmit="return confirm('Remove this line?')">
+                                                @csrf @method('DELETE')
+                                                <button class="btn btn-sm btn-link text-danger p-0" title="Remove"><i class="fas fa-times"></i></button>
+                                            </form>
+                                        </td>
+                                    @endif
+                                </tr>
+                            @endforeach
+                            @foreach($deductions as $item)
+                                <tr>
+                                    <td><i class="fas fa-minus-circle text-danger me-1"></i>{{ $item->label }}</td>
+                                    <td class="text-end text-nowrap text-danger">−₹{{ number_format($item->amount, 2) }}</td>
+                                    @if($editable)
+                                        <td class="text-end">
+                                            <form method="POST" action="{{ route('admin.payouts.items.destroy', [$payout, $item]) }}" onsubmit="return confirm('Remove this line?')">
+                                                @csrf @method('DELETE')
+                                                <button class="btn btn-sm btn-link text-danger p-0" title="Remove"><i class="fas fa-times"></i></button>
+                                            </form>
+                                        </td>
+                                    @endif
+                                </tr>
+                            @endforeach
+                        </tbody>
+                        <tfoot>
+                            <tr class="table-light">
+                                <td class="fs-5 fw-semibold">Net Pay</td>
+                                <td class="text-end fs-5 fw-semibold text-nowrap">₹{{ number_format($payout->amount, 2) }}</td>
+                                @if($editable)<td></td>@endif
+                            </tr>
+                        </tfoot>
+                    </table>
+
+                    @if($payout->status === 'paid')
+                        <div class="border-top mt-3 pt-3 small">
+                            <i class="fas fa-check-circle text-success me-1"></i>
+                            Paid on <strong>{{ $payout->paid_at?->format('M d, Y') }}</strong>
+                            @if($payout->paymentMethodLabel()) via <strong>{{ $payout->paymentMethodLabel() }}</strong>@endif
+                            @if($payout->transaction_reference) · Ref: <strong>{{ $payout->transaction_reference }}</strong>@endif
+                        </div>
+                    @endif
+                    @if($payout->notes)
+                        <div class="small text-muted mt-2" style="white-space: pre-line;">{{ $payout->notes }}</div>
+                    @endif
                 </div>
             </div>
         </div>
 
-        <!-- Sidebar -->
-        <div class="col-md-4">
-            <!-- Quick Actions -->
-            <div class="card border-0 shadow-sm mb-3">
-                <div class="card-header bg-white">
-                    <h6 class="mb-0"><i class="fas fa-cog me-2"></i>Quick Actions</h6>
-                </div>
-                <div class="card-body">
-                    @if($payout->status !== 'paid')
-                        <button type="button" class="btn btn-outline-success w-100 mb-2" data-bs-toggle="modal" data-bs-target="#markPaidModal">
-                            <i class="fas fa-check-circle me-2"></i>Mark as Paid
-                        </button>
-                        <a href="{{ route('admin.payouts.edit', $payout) }}" class="btn btn-outline-warning w-100 mb-2">
-                            <i class="fas fa-edit me-2"></i>Edit Payout
-                        </a>
-                        <form action="{{ route('admin.payouts.destroy', $payout) }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this payout?');">
+        <div class="col-lg-4 d-print-none">
+            @if($editable)
+                <!-- Adjustments -->
+                <div class="card border-0 shadow-sm mb-3">
+                    <div class="card-header bg-white">
+                        <h6 class="mb-0"><i class="fas fa-sliders-h me-2"></i>Add Earning / Deduction</h6>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" action="{{ route('admin.payouts.items.store', $payout) }}">
                             @csrf
-                            @method('DELETE')
-                            <button type="submit" class="btn btn-outline-danger w-100">
-                                <i class="fas fa-trash me-2"></i>Delete Payout
-                            </button>
+                            <div class="btn-group w-100 mb-3" role="group">
+                                <input type="radio" class="btn-check" name="type" id="item-earning" value="earning" checked>
+                                <label class="btn btn-outline-success" for="item-earning"><i class="fas fa-plus me-1"></i>Earning</label>
+                                <input type="radio" class="btn-check" name="type" id="item-deduction" value="deduction">
+                                <label class="btn btn-outline-danger" for="item-deduction"><i class="fas fa-minus me-1"></i>Deduction</label>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label small fw-semibold" for="item-label">Description</label>
+                                <input type="text" class="form-control" id="item-label" name="label" placeholder="e.g. Bonus, Advance recovery" maxlength="255" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold" for="item-amount">Amount (₹)</label>
+                                <input type="number" class="form-control" id="item-amount" name="amount" min="0.01" step="0.01" required>
+                            </div>
+                            <button type="submit" class="btn btn-outline-primary w-100">Add Line</button>
                         </form>
-                    @else
-                        <div class="alert alert-success mb-0">
-                            <i class="fas fa-check-circle me-2"></i>
-                            This payout has been marked as paid and cannot be modified.
-                        </div>
-                    @endif
+                    </div>
                 </div>
-            </div>
 
-            <!-- Payment Summary -->
-            <div class="card border-0 shadow-sm">
-                <div class="card-header bg-white">
-                    <h6 class="mb-0"><i class="fas fa-receipt me-2"></i>Payment Summary</h6>
-                </div>
-                <div class="card-body">
-                    <div class="d-flex justify-content-between mb-2">
-                        <span class="text-muted">Amount:</span>
-                        <strong class="text-success">₹{{ number_format($payout->amount, 2) }}</strong>
+                <!-- Mark paid -->
+                <div class="card border-0 shadow-sm mb-3">
+                    <div class="card-header bg-white">
+                        <h6 class="mb-0"><i class="fas fa-money-check-alt me-2"></i>Mark as Paid</h6>
                     </div>
-                    <div class="d-flex justify-content-between mb-2">
-                        <span class="text-muted">Method:</span>
-                        <strong>{{ ucfirst(str_replace('_', ' ', $payout->frequency ?? 'N/A')) }}</strong>
-                    </div>
-                    <div class="d-flex justify-content-between mb-2">
-                        <span class="text-muted">Status:</span>
-                        @if($payout->status === 'paid')
-                            <span class="badge bg-success">Paid</span>
-                        @else
-                            <span class="badge bg-warning">Pending</span>
+                    <div class="card-body">
+                        @if($incomplete)
+                            <p class="small text-warning mb-2"><i class="fas fa-exclamation-triangle me-1"></i>This payslip is incomplete: {{ implode('; ', $incomplete) }}.</p>
                         @endif
+                        <form method="POST" action="{{ route('admin.payouts.mark-paid', $payout) }}" onsubmit="return confirm('Mark ₹{{ number_format($payout->amount, 2) }} as paid? The payslip will be locked.')">
+                            @csrf
+                            {{-- The amount confirmed here; payment is refused if the payslip changed since --}}
+                            <input type="hidden" name="expected_amount" value="{{ $payout->amount }}">
+                            <div class="mb-2">
+                                <label class="form-label small fw-semibold" for="payment_method">Payment Method</label>
+                                <select class="form-select" id="payment_method" name="payment_method" required>
+                                    @foreach(\App\Models\EmployeePayout::PAYMENT_METHODS as $value => $label)
+                                        <option value="{{ $value }}">{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label small fw-semibold" for="transaction_reference">Reference <span class="text-muted fw-normal">(optional)</span></label>
+                                <input type="text" class="form-control" id="transaction_reference" name="transaction_reference" placeholder="UTR / cheque no." maxlength="255">
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label small fw-semibold" for="paid_at">Paid On</label>
+                                <input type="date" class="form-control" id="paid_at" name="paid_at" value="{{ now()->toDateString() }}" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold" for="paid_notes">Note <span class="text-muted fw-normal">(optional)</span></label>
+                                <textarea class="form-control" id="paid_notes" name="paid_notes" rows="2" maxlength="1000"></textarea>
+                            </div>
+                            @if($incomplete)
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" name="allow_incomplete" value="1" id="allow_incomplete">
+                                    <label class="form-check-label small" for="allow_incomplete">Pay anyway. Days not marked by now stay unpaid, and the payslip can't be changed after it is paid.</label>
+                                </div>
+                            @endif
+                            <button type="submit" class="btn btn-success w-100"><i class="fas fa-check me-2"></i>Mark Paid · ₹{{ number_format($payout->amount, 2) }}</button>
+                        </form>
                     </div>
-                    @if($payout->status === 'paid' && $payout->paid_at)
-                    <hr>
-                    <div class="d-flex justify-content-between">
-                        <span class="text-muted">Paid On:</span>
-                        <strong>{{ $payout->paid_at->format('M d, Y') }}</strong>
-                    </div>
+                </div>
+
+                <form method="POST" action="{{ route('admin.payouts.destroy', $payout) }}" onsubmit="return confirm('Delete this draft payslip? It can be generated again.')">
+                    @csrf @method('DELETE')
+                    <button type="submit" class="btn btn-link text-danger w-100"><i class="fas fa-trash me-1"></i>Delete draft payslip</button>
+                </form>
+            @endif
+
+            <!-- Salary basis -->
+            <div class="card border-0 shadow-sm mt-3">
+                <div class="card-header bg-white">
+                    <h6 class="mb-0"><i class="fas fa-rupee-sign me-2"></i>Salary Basis</h6>
+                </div>
+                <div class="card-body small">
+                    <p class="mb-1"><strong>{{ \App\Models\EmployeeSalary::PAY_TYPES[$payout->pay_type] ?? 'Monthly Fixed' }}</strong> · ₹{{ number_format($payout->rate, 0) }} / {{ $payout->pay_type === 'daily' ? 'day' : 'month' }}</p>
+                    <p class="text-muted mb-2">Present{{ $weights['paid_leave'] ? ', Paid Leave' : '' }}{{ $weights['week_off'] ? ', Week Off' : '' }} count as a full day; Half Day as ½. Absent and unmarked days are unpaid.</p>
+                    @if($employee)
+                        <a href="{{ route('admin.employees.show', $employee) }}#salary" class="text-decoration-none">View salary history <i class="fas fa-arrow-right ms-1"></i></a>
                     @endif
                 </div>
             </div>
@@ -217,47 +279,13 @@
     </div>
 </div>
 
-<!-- Mark as Paid Modal -->
-@if($payout->status !== 'paid')
-<div class="modal fade" id="markPaidModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form action="{{ route('admin.payouts.mark-paid', $payout) }}" method="POST" data-ajax="true">
-                @csrf
-                <div class="modal-header">
-                    <h5 class="modal-title">Mark Payout as Paid</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle me-2"></i>
-                        You are about to mark this payout as paid. This action will record the payment and prevent further modifications.
-                    </div>
-                    <div class="mb-3">
-                        <label for="transaction_reference" class="form-label">Transaction Reference</label>
-                        <input type="text" class="form-control" id="transaction_reference" name="transaction_reference" placeholder="e.g., TXN123456, Cheque #789">
-                        <small class="text-muted">Optional: Enter transaction ID, cheque number, or reference</small>
-                    </div>
-                    <div class="mb-3">
-                        <label for="paid_notes" class="form-label">Payment Notes</label>
-                        <textarea class="form-control" id="paid_notes" name="paid_notes" rows="3" placeholder="Enter any notes about the payment"></textarea>
-                    </div>
-                    <div class="bg-light p-3 rounded">
-                        <p class="mb-1"><strong>Amount:</strong> ₹{{ number_format($payout->amount, 2) }}</p>
-                        <p class="mb-1"><strong>Employee:</strong> {{ $payout->employee->getField('name', 'N/A') }}</p>
-                        <p class="mb-0"><strong>Payment Method:</strong> {{ ucfirst(str_replace('_', ' ', $payout->frequency ?? 'N/A')) }}</p>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success">
-                        <i class="fas fa-check-circle me-2"></i>Mark as Paid
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-@endif
+@push('styles')
+<style>
+    @media print {
+        .sidebar, nav.navbar, .top-navbar, .alert { display: none !important; }
+        .payslip { box-shadow: none !important; border: 1px solid #dee2e6 !important; }
+        .col-lg-8 { width: 100% !important; }
+    }
+</style>
+@endpush
 @endsection
-

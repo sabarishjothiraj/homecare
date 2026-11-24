@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Service;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 
 class ServiceController extends Controller
 {
@@ -40,12 +39,14 @@ class ServiceController extends Controller
             'display_order' => 'nullable|integer|min:0',
         ]);
 
-        $validated['slug'] = Str::slug($validated['name']);
+        $validated = $this->prepareForSave($validated);
+        // A new row needs a description even when the field was not sent.
+        $validated['description'] ??= '';
         $validated['is_active'] = $request->has('is_active');
 
         // Auto-set display order if not provided
-        if (!isset($validated['display_order'])) {
-            $validated['display_order'] = Service::max('display_order') + 1;
+        if (! isset($validated['order'])) {
+            $validated['order'] = (int) Service::max('order') + 1;
         }
 
         $service = Service::create($validated);
@@ -54,22 +55,12 @@ class ServiceController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Service created successfully.',
-                'redirect' => route('admin.services.index')
+                'redirect' => route('admin.services.index'),
             ]);
         }
 
         return redirect()->route('admin.services.index')
             ->with('success', 'Service created successfully.');
-    }
-
-    /**
-     * Show service details
-     */
-    public function show(Service $service)
-    {
-        $service->loadCount('contracts');
-
-        return view('admin.services.show', compact('service'));
     }
 
     /**
@@ -93,7 +84,8 @@ class ServiceController extends Controller
             'display_order' => 'nullable|integer|min:0',
         ]);
 
-        $validated['slug'] = Str::slug($validated['name']);
+        // A blank Display Order keeps the current position.
+        $validated = $this->prepareForSave($validated);
         $validated['is_active'] = $request->has('is_active');
 
         $service->update($validated);
@@ -102,7 +94,7 @@ class ServiceController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Service updated successfully.',
-                'redirect' => route('admin.services.index')
+                'redirect' => route('admin.services.index'),
             ]);
         }
 
@@ -115,16 +107,18 @@ class ServiceController extends Controller
      */
     public function destroy(Service $service)
     {
-        // Check if service has contracts
-        if ($service->contracts()->exists()) {
+        if ($service->isInUse()) {
+            $message = 'Cannot delete a service used by existing contracts. Mark it inactive instead.';
+
             if (request()->wantsJson() || request()->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Cannot delete service with existing contracts.'
+                    'message' => $message,
                 ], 422);
             }
+
             return redirect()->back()
-                ->with('error', 'Cannot delete service with existing contracts.');
+                ->with('error', $message);
         }
 
         $service->delete();
@@ -133,12 +127,31 @@ class ServiceController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Service deleted successfully.',
-                'redirect' => route('admin.services.index')
+                'redirect' => route('admin.services.index'),
             ]);
         }
 
         return redirect()->route('admin.services.index')
             ->with('success', 'Service deleted successfully.');
     }
-}
 
+    /**
+     * Map the form fields onto the services columns.
+     */
+    private function prepareForSave(array $validated): array
+    {
+        // The form calls it display_order; the column is `order`.
+        if (isset($validated['display_order'])) {
+            $validated['order'] = $validated['display_order'];
+        }
+        unset($validated['display_order']);
+
+        // description is NOT NULL, and an empty textarea arrives as null. An
+        // omitted field stays absent so an update leaves the stored text alone.
+        if (array_key_exists('description', $validated)) {
+            $validated['description'] ??= '';
+        }
+
+        return $validated;
+    }
+}

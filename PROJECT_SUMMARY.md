@@ -246,8 +246,11 @@ To make this application fully functional, you need to:
 ## Default Credentials
 
 After running seeders:
-- **Super Admin**: admin@homenursing.com / password
-- **Regular Admin**: user@homenursing.com / password
+- **Super Admin**: admin@homenursing.com
+- **Regular Admin**: user@homenursing.com (also needs the owner's login OTP)
+
+The password is `SEED_ADMIN_PASSWORD` from `.env`, or a random one printed once
+by `php artisan db:seed`.
 
 ## File Count Summary
 

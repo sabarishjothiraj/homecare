@@ -17,7 +17,7 @@ class LogOtpNotifier implements OtpNotifier
 
     public function send(OtpMessage $message): bool
     {
-        Log::info('[OTP:log channel] ' . $message->toPlainText());
+        Log::info('[OTP:log channel] '.$message->toPlainText());
 
         return true;
     }

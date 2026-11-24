@@ -15,9 +15,7 @@ use Illuminate\Support\Facades\Log;
  */
 class HttpSmsSender implements SmsSender
 {
-    public function __construct(private readonly array $config)
-    {
-    }
+    public function __construct(private readonly array $config) {}
 
     public function send(string $phoneNumber, string $message): bool
     {
@@ -53,7 +51,7 @@ class HttpSmsSender implements SmsSender
             ]);
         } catch (\Throwable $e) {
             // Never let a gateway outage become a 500 mid-login.
-            Log::error('[SMS] Delivery failed: ' . $e->getMessage(), ['exception' => $e]);
+            Log::error('[SMS] Delivery failed: '.$e->getMessage(), ['exception' => $e]);
         }
 
         return false;

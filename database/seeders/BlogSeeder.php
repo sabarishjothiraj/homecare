@@ -13,16 +13,14 @@ class BlogSeeder extends Seeder
      */
     public function run(): void
     {
-        // Get first admin user or create a default one
-        $admin = User::where('is_admin', true)->first();
+        // The super admin from UserSeeder authors the sample posts. Don't
+        // invent an account with a known password if it isn't there.
+        $admin = User::where('role', 'super_admin')->orderBy('id')->first();
 
-        if (!$admin) {
-            $admin = User::create([
-                'name' => 'Admin',
-                'email' => 'admin@homenursing.com',
-                'password' => bcrypt('password'),
-                'is_admin' => true,
-            ]);
+        if (! $admin) {
+            $this->command?->warn('BlogSeeder skipped: no super admin user. Run UserSeeder first.');
+
+            return;
         }
 
         $blogs = [
@@ -83,8 +81,10 @@ class BlogSeeder extends Seeder
             ],
         ];
 
+        // Keyed on the unique slug so a re-run is harmless. withTrashed: a post
+        // the office deleted still holds its slug and should stay deleted.
         foreach ($blogs as $blog) {
-            Blog::create($blog);
+            Blog::withTrashed()->firstOrCreate(['slug' => $blog['slug']], $blog);
         }
     }
 }

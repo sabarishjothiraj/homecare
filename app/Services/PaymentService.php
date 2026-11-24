@@ -2,13 +2,15 @@
 
 namespace App\Services;
 
-use App\Models\Payment;
 use App\Models\Contract;
 use App\Models\Employee;
+use App\Models\Notification;
+use App\Models\Payment;
+use Exception;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Razorpay\Api\Api;
-use Exception;
 
 class PaymentService
 {
@@ -53,7 +55,7 @@ class PaymentService
                 'amount' => [
                     $balance <= 0
                         ? 'This contract is already fully paid.'
-                        : 'Amount exceeds the outstanding balance of ₹' . number_format($balance, 2) . '.',
+                        : 'Amount exceeds the outstanding balance of ₹'.number_format($balance, 2).'.',
                 ],
             ]);
         }
@@ -75,7 +77,7 @@ class PaymentService
                 'amount' => [
                     $available <= 0
                         ? 'There is no unpaid balance available to charge. An open payment may already cover it.'
-                        : 'Amount exceeds the ₹' . number_format($available, 2) . ' still available to charge.',
+                        : 'Amount exceeds the ₹'.number_format($available, 2).' still available to charge.',
                 ],
             ]);
         }
@@ -85,7 +87,8 @@ class PaymentService
      * Release orders that were opened but never paid.
      *
      * Marked failed rather than deleted so an abandoned checkout stays visible
-     * in the payment history.
+     * in the payment history. One conditional UPDATE, so a row a capture has
+     * just completed is never expired back to failed.
      */
     public function expireStalePendingOrders(Contract $contract): int
     {
@@ -147,12 +150,12 @@ class PaymentService
         $order = $this->razorpay()->order->create([
             'amount' => (int) round($amount * 100), // Amount in paise
             'currency' => 'INR',
-            'receipt' => 'contract_' . $contract->id,
+            'receipt' => 'contract_'.$contract->id,
             'notes' => [
                 'contract_id' => $contract->id,
                 'patient_id' => $contract->patient_id,
-                'type' => 'contract_payment'
-            ]
+                'type' => 'contract_payment',
+            ],
         ]);
 
         // Create payment record
@@ -220,21 +223,55 @@ class PaymentService
     protected function cancelUnfundedOrders(Contract $contract): void
     {
         $remaining = $contract->balanceDue();
+        $liveSince = now()->subMinutes(Contract::orderTtlMinutes());
 
         $open = $contract->payments()
             ->where('status', 'pending')
             ->orderBy('id')
             ->get();
 
-        foreach ($open as $order) {
+        // Live checkouts claim the remaining balance first, as in
+        // reservedAmount(): an older order past its TTL must not push one the
+        // customer may be paying right now into cancellation.
+        [$stale, $live] = $open->partition(
+            fn (Payment $order) => ! $order->created_at || $order->created_at->lt($liveSince)
+        );
+
+        foreach ($live->concat($stale) as $order) {
             if ((float) $order->amount > $remaining + self::EPSILON) {
-                $order->update(['status' => 'failed']);
+                // Conditional, so a capture that completed the row since it
+                // was read is never turned back into 'failed'.
+                Payment::whereKey($order->getKey())
+                    ->where('status', 'pending')
+                    ->update(['status' => 'failed']);
 
                 continue;
             }
 
             $remaining -= (float) $order->amount;
         }
+    }
+
+    /**
+     * Cancel every open gateway order on a contract, e.g. when it is closed.
+     *
+     * Razorpay orders cannot be cancelled at the gateway, so a customer can
+     * still pay one later; that capture is then flagged for refund instead of
+     * being credited (see settleCapture()).
+     *
+     * @return int the number of orders cancelled
+     */
+    public function cancelOpenOrdersForContract(Contract $contract): int
+    {
+        return DB::transaction(function () use ($contract) {
+            // Same lock order as the collection and capture paths: contract
+            // first, then its payment rows.
+            Contract::withTrashed()->whereKey($contract->getKey())->lockForUpdate()->first();
+
+            return Payment::where('contract_id', $contract->getKey())
+                ->where('status', 'pending')
+                ->update(['status' => 'failed']);
+        });
     }
 
     /**
@@ -248,11 +285,11 @@ class PaymentService
             $order = $this->razorpay()->order->create([
                 'amount' => $amount * 100, // Amount in paise
                 'currency' => 'INR',
-                'receipt' => 'employee_' . $employee->id,
+                'receipt' => 'employee_'.$employee->id,
                 'notes' => [
                     'employee_id' => $employee->id,
-                    'type' => 'employee_activation'
-                ]
+                    'type' => 'employee_activation',
+                ],
             ]);
 
             // Create payment record
@@ -292,6 +329,7 @@ class PaymentService
             ];
 
             $this->razorpay()->utility->verifyPaymentSignature($attributes);
+
             return true;
         } catch (Exception $e) {
             return false;
@@ -301,23 +339,23 @@ class PaymentService
     /**
      * Complete a payment that arrived through the browser checkout flow.
      *
-     * The signature is the per-payment HMAC Razorpay hands to the client, so
-     * it has to be checked here before the row is completed.
+     * The signature is the per-payment HMAC Razorpay hands to the client. The
+     * callback that reaches this has no session, so the signature is checked
+     * before the order is even looked up: an unverified request must neither
+     * change a row nor be told that an order is paid.
      */
     public function processSuccessfulPayment(string $orderId, string $paymentId, string $signature): bool
     {
-        $payment = $this->findOpenPayment($orderId);
+        if (! $this->verifyPayment($orderId, $paymentId, $signature)) {
+            Log::warning('Razorpay payment signature rejected.', [
+                'order_id' => $orderId,
+                'payment_id' => $paymentId,
+            ]);
 
-        if (!$payment instanceof Payment) {
-            return $payment;
-        }
-
-        if (!$this->verifyPayment($orderId, $paymentId, $signature)) {
-            $payment->update(['status' => 'failed']);
             return false;
         }
 
-        return $this->completePayment($payment, $paymentId, $signature);
+        return $this->settleCapture($orderId, $paymentId, $signature);
     }
 
     /**
@@ -329,53 +367,154 @@ class PaymentService
      */
     public function markPaymentCaptured(string $orderId, string $paymentId): bool
     {
-        $payment = $this->findOpenPayment($orderId);
-
-        if (!$payment instanceof Payment) {
-            return $payment;
-        }
-
-        return $this->completePayment($payment, $paymentId);
+        return $this->settleCapture($orderId, $paymentId);
     }
 
     /**
-     * Locate the payment for an order, short-circuiting one already completed.
+     * Apply a verified capture to its order's payment row.
      *
-     * Returns the Payment to act on, or a bool that the caller should return
-     * as-is: false when the order is unknown, true when it is already done.
+     * Returns true when the order is completed (now or already), false when
+     * the order is unknown or the capture could not be credited.
      *
-     * The callback and the webhook can both land for the same order;
-     * completing it twice would double-count against the contract total.
+     * Only a row that is still pending is completed. A cancelled order can
+     * still be paid at Razorpay (its orders never expire), and crediting it
+     * on top of the cash or the newer order that replaced it would collect
+     * twice. The contract row is locked before the payment row, the order the
+     * collection paths use, so a capture cannot interleave with them.
      */
-    protected function findOpenPayment(string $orderId): Payment|bool
+    protected function settleCapture(string $orderId, string $paymentId, ?string $signature = null): bool
     {
-        $payment = Payment::where('razorpay_order_id', $orderId)->first();
+        // Looked up before the transaction opens. Under REPEATABLE READ the
+        // first plain read inside a transaction fixes its snapshot; taken
+        // before the contract lock, it would hide a capture that committed
+        // while this one waited for the lock.
+        $found = Payment::where('razorpay_order_id', $orderId)->first();
 
-        if (!$payment) {
+        if (! $found) {
             return false;
         }
 
-        return $payment->status === 'completed' ? true : $payment;
+        return DB::transaction(function () use ($found, $paymentId, $signature) {
+            $contract = $found->contract_id
+                ? Contract::withTrashed()->whereKey($found->contract_id)->lockForUpdate()->first()
+                : null;
+
+            $payment = Payment::whereKey($found->getKey())->lockForUpdate()->first();
+
+            if ($payment->status === 'completed') {
+                // The callback and the webhook both land for one order, and
+                // the webhook is retried: the same capture is already counted.
+                if ($payment->razorpay_payment_id === null || $payment->razorpay_payment_id === $paymentId) {
+                    return true;
+                }
+
+                $this->flagUncreditedCapture($payment, $paymentId, "the order was already paid by Razorpay payment {$payment->razorpay_payment_id}");
+
+                return false;
+            }
+
+            if ($payment->status !== 'pending') {
+                $this->flagUncreditedCapture($payment, $paymentId, $payment->status === 'failed'
+                    ? 'the order had already been cancelled'
+                    : "the order was already marked {$payment->status}");
+
+                return false;
+            }
+
+            if ($contract && ($contract->status === 'closed' || $contract->trashed())) {
+                // Covers orders left open on contracts closed before closing
+                // cancelled them: a closed contract takes no more money.
+                $this->flagUncreditedCapture($payment, $paymentId, $contract->trashed()
+                    ? 'the contract had been deleted'
+                    : 'the contract had already been closed');
+
+                return false;
+            }
+
+            if ($contract) {
+                // A locking read returns the latest committed rows, so the
+                // check holds even if a caller's transaction took its
+                // snapshot before the contract lock was granted.
+                $paid = (float) $contract->payments()
+                    ->where('status', 'completed')
+                    ->lockForUpdate()
+                    ->sum('amount');
+                $balance = max(0, (float) $contract->amount - $paid);
+
+                if ((float) $payment->amount > $balance + self::EPSILON) {
+                    $this->flagUncreditedCapture($payment, $paymentId, 'it would take the contract past its total (balance due ₹'.number_format($balance, 2).')');
+
+                    return false;
+                }
+            }
+
+            $payment->update(array_filter([
+                'razorpay_payment_id' => $paymentId,
+                'razorpay_signature' => $signature,
+                'status' => 'completed',
+                'paid_at' => now(),
+            ], fn ($value) => $value !== null));
+
+            // Handle post-payment actions
+            if ($payment->payment_type === 'employee_activation' && $payment->employee) {
+                $this->activateEmployee($payment->employee);
+            }
+
+            return true;
+        });
     }
 
     /**
-     * Mark a verified payment completed and run its post-payment actions.
+     * Record money Razorpay captured that the contract cannot be credited with.
+     *
+     * The customer really paid, so it cannot just be dropped: the row stays
+     * out of the paid totals, carries a refund marker in its notes, and an
+     * admin notification points staff at the payment to refund.
+     *
+     * Must run inside the transaction that holds the payment row lock.
      */
-    protected function completePayment(Payment $payment, string $paymentId, ?string $signature = null): bool
+    protected function flagUncreditedCapture(Payment $payment, string $paymentId, string $reason): void
     {
-        $payment->update(array_filter([
-            'razorpay_payment_id' => $paymentId,
-            'razorpay_signature' => $signature,
-            'status' => 'completed',
-            'paid_at' => now(),
-        ], fn ($value) => $value !== null));
-
-        // Handle post-payment actions
-        if ($payment->payment_type === 'employee_activation' && $payment->employee) {
-            $this->activateEmployee($payment->employee);
+        // A replayed webhook, or verify and webhook for the same capture,
+        // must not stack markers or alerts.
+        if (str_contains((string) $payment->notes, Payment::REFUND_MARKER." {$paymentId}:")) {
+            return;
         }
 
-        return true;
+        $marker = Payment::REFUND_MARKER." {$paymentId}: captured by Razorpay on ".now()->format('d M Y h:i A')
+            ." but not credited because {$reason}. Refund it from the Razorpay dashboard.";
+
+        $updates = ['notes' => ltrim($payment->notes."\n".$marker)];
+
+        // An order that was still open stops reserving the balance.
+        if ($payment->status === 'pending') {
+            $updates['status'] = 'failed';
+        }
+
+        // Keeps the id to refund visible on the payment page.
+        if (! $payment->razorpay_payment_id) {
+            $updates['razorpay_payment_id'] = $paymentId;
+        }
+
+        $payment->update($updates);
+
+        Log::error('Razorpay capture not credited; refund required.', [
+            'payment_id' => $payment->id,
+            'contract_id' => $payment->contract_id,
+            'razorpay_order_id' => $payment->razorpay_order_id,
+            'razorpay_payment_id' => $paymentId,
+            'amount' => $payment->amount,
+            'reason' => $reason,
+        ]);
+
+        Notification::create([
+            'type' => 'payment_refund_required',
+            'title' => 'Payment Needs Refund',
+            'message' => 'Razorpay payment '.$paymentId.' of ₹'.number_format((float) $payment->amount, 2)
+                ." for payment #{$payment->id} was captured but not credited because {$reason}. Refund it from the Razorpay dashboard.",
+            'link' => route('admin.payments.show', $payment),
+            'contract_id' => $payment->contract_id,
+        ]);
     }
 
     /**
@@ -392,4 +531,3 @@ class PaymentService
         ]);
     }
 }
-

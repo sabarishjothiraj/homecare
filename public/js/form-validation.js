@@ -76,8 +76,8 @@
             message: (param) => `File size must not exceed ${Math.round(param / 1024)}MB.`
         },
         phone: {
-            validate: (value) => !value || /^[\d\s\-\+\(\)]+$/.test(value),
-            message: 'Please enter a valid phone number.'
+            validate: (value) => !value || /^\d{10}$/.test(value),
+            message: 'Phone number must be exactly 10 digits.'
         },
         in: {
             validate: (value, param) => {
@@ -148,6 +148,9 @@
                 rules.push({ rule: 'filesize', param: field.dataset.maxSize });
             }
         }
+
+        return rules;
+    }
 
     /**
      * Validate a single field
@@ -268,6 +271,16 @@
      * Setup real-time validation for a field
      */
     function setupFieldValidation(field, form) {
+        // Phone fields accept digits only, max 10 (registered first so validation sees the cleaned value)
+        if (field.dataset.validate && field.dataset.validate.split('|').includes('phone')) {
+            field.addEventListener('input', function() {
+                const digits = this.value.replace(/\D/g, '').slice(0, 10);
+                if (this.value !== digits) {
+                    this.value = digits;
+                }
+            });
+        }
+
         // Validate on blur
         field.addEventListener('blur', function() {
             if (this.value || this.type === 'checkbox' || this.classList.contains('is-invalid')) {

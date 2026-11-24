@@ -43,7 +43,7 @@
                                 <label for="phone" class="form-label">Phone Number <span class="text-danger">*</span></label>
                                 <input type="tel" class="form-control @error('phone') is-invalid @enderror"
                                        id="phone" name="phone" value="{{ old('phone', $patient->phone) }}"
-                                       required maxlength="20" data-validate="phone">
+                                       required maxlength="10" inputmode="numeric" pattern="[0-9]{10}" data-validate="phone">
                                 @error('phone')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
@@ -155,7 +155,7 @@
                                 <input type="tel" class="form-control @error('emergency_contact_phone') is-invalid @enderror"
                                        id="emergency_contact_phone" name="emergency_contact_phone"
                                        value="{{ old('emergency_contact_phone', $patient->emergency_contact_phone) }}"
-                                       maxlength="20" data-validate="phone">
+                                       maxlength="10" inputmode="numeric" pattern="[0-9]{10}" data-validate="phone">
                                 @error('emergency_contact_phone')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
@@ -175,7 +175,7 @@
                             <!-- Is Active -->
                             <div class="col-md-12">
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="is_active" name="is_active" 
+                                    <input class="form-check-input" type="checkbox" id="is_active" name="is_active" value="1"
                                            {{ old('is_active', $patient->is_active) ? 'checked' : '' }}>
                                     <label class="form-check-label" for="is_active">
                                         Active Patient

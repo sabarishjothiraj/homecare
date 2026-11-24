@@ -33,11 +33,19 @@
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-body">
             <form method="GET" action="{{ route('admin.employees.index') }}" class="row g-3">
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <label class="form-label">Search</label>
                     <input type="text" name="search" class="form-control" placeholder="Search employees..." value="{{ request('search') }}">
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
+                    <label class="form-label">Availability</label>
+                    <select name="availability" class="form-select">
+                        <option value="">All</option>
+                        <option value="available" {{ request('availability') === 'available' ? 'selected' : '' }}>Available</option>
+                        <option value="placed" {{ request('availability') === 'placed' ? 'selected' : '' }}>Assigned / Covering</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
                     <label class="form-label">Status</label>
                     <select name="status" class="form-select">
                         <option value="">All Status</option>
@@ -67,6 +75,7 @@
                                 <th>Name</th>
                                 <th>Contact</th>
                                 <th>Status</th>
+                                <th>Availability</th>
                                 <th>Created By</th>
                                 <th>Documents</th>
                                 <th>Joined</th>
@@ -79,13 +88,13 @@
                                 <td><strong>#{{ $employee->id }}</strong></td>
                                 <td>
                                     <div class="d-flex align-items-center">
-                                        @php($employeeImagePath = $employee->getField('employee_image_path'))
-                                        @if($employeeImagePath)
-                                            <img src="{{ Storage::url($employeeImagePath) }}"
+                                        @if($employee->getField('employee_image_path'))
+                                            @php($employeeImageUrl = route('admin.employees.photo', $employee))
+                                            <img src="{{ $employeeImageUrl }}"
                                                  alt="{{ $employee->getField('name', 'Employee') }}"
                                                  class="rounded-circle me-3 object-fit-cover employee-image-thumb"
                                                  style="width: 64px; height: 64px; cursor: pointer;"
-                                                 data-image-url="{{ Storage::url($employeeImagePath) }}"
+                                                 data-image-url="{{ $employeeImageUrl }}"
                                                  data-image-name="{{ $employee->getField('name', 'Employee') }}"
                                                  title="Click to enlarge">
                                         @else
@@ -118,11 +127,44 @@
                                         <span class="badge bg-secondary">Inactive</span>
                                     @endif
                                 </td>
+                                <td class="small" style="min-width: 170px;">
+                                    @php($employeePlacements = $placements->get($employee->id, collect()))
+                                    @forelse($employeePlacements as $placement)
+                                        <div class="{{ $loop->last ? '' : 'mb-1' }}">
+                                            @if($placement->isCover())
+                                                @if($placement->start_date->isFuture())
+                                                    <span class="badge bg-primary">Cover scheduled</span>
+                                                @else
+                                                    <span class="badge bg-warning text-dark">Covering</span>
+                                                @endif
+                                            @else
+                                                <span class="badge bg-info text-dark">Assigned</span>
+                                            @endif
+                                            <a href="{{ route('admin.contracts.show', $placement->contract_id) }}" class="text-decoration-none">
+                                                {{ $placement->contract->patient->name ?? 'Contract #'.$placement->contract_id }}
+                                            </a>
+                                            <div class="text-muted">
+                                                @if($placement->isCover())
+                                                    For {{ $placement->coverFor?->employeeName() ?? 'N/A' }} ·
+                                                    {{ $placement->start_date->isFuture() ? 'from '.$placement->start_date->format('M d') : 'until '.$placement->end_date->format('M d') }}
+                                                @elseif($leave = $placement->currentCover())
+                                                    <i class="fas fa-user-clock me-1"></i>On leave until {{ $leave->end_date->format('M d') }}
+                                                @endif
+                                            </div>
+                                        </div>
+                                    @empty
+                                        @if($employee->status === 'active')
+                                            <span class="badge bg-success bg-opacity-10 text-success border border-success-subtle">Available</span>
+                                        @else
+                                            <span class="text-muted">—</span>
+                                        @endif
+                                    @endforelse
+                                </td>
                                 <td>
                                     <small>{{ $employee->creator->name ?? 'System' }}</small>
                                 </td>
                                 <td>
-                                    <span class="badge bg-info">{{ $employee->documents->count() }} docs</span>
+                                    <span class="badge bg-info">{{ count($employee->uploadedDocuments()) + $employee->documents->count() }} docs</span>
                                 </td>
                                 <td>
                                     <small class="text-muted">{{ $employee->created_at->format('M d, Y') }}</small>

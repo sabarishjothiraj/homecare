@@ -51,11 +51,7 @@
 
 ### Currently Working (No Database Required)
 
-1. **Welcome/Status Page**: `http://localhost:8000/welcome`
-   - Shows Laravel version, PHP version, application status
-   - ✅ Status: Working (HTTP 200 OK)
-
-2. **Home Page**: `http://localhost:8000/`
+1. **Home Page**: `http://localhost:8000/`
    - Temporary placeholder home page
    - ✅ Status: Working (HTTP 200 OK)
    - Works even without database setup
@@ -71,9 +67,8 @@
    - Join With Us
 
 2. **Admin Panel**: `http://localhost:8000/admin`
-   - Login with default credentials:
-     - Email: `admin@homenursing.com`
-     - Password: `password`
+   - Login as `admin@homenursing.com` with the `SEED_ADMIN_PASSWORD` from
+     `.env`, or the random password printed once by `php artisan db:seed`
 
 ---
 

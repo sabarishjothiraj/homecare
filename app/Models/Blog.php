@@ -33,12 +33,36 @@ class Blog extends Model
     protected static function boot()
     {
         parent::boot();
-        
+
         static::creating(function ($blog) {
-            if (!$blog->slug) {
-                $blog->slug = Str::slug($blog->title);
+            if (! $blog->slug) {
+                $blog->slug = static::uniqueSlug($blog->title);
             }
         });
+    }
+
+    /**
+     * Build a non-empty slug from the title that no other post (including
+     * soft-deleted ones, which the unique index still covers) is using.
+     */
+    public static function uniqueSlug(string $title, ?int $ignoreId = null): string
+    {
+        // Str::slug() drops scripts it cannot transliterate, e.g. Tamil,
+        // leaving '' - which would make route('blogs.show') point at /blogs.
+        $base = rtrim(Str::limit(Str::slug($title), 240, ''), '-')
+            ?: 'post-'.Str::lower(Str::random(8));
+
+        $slug = $base;
+        $suffix = 2;
+
+        while (static::withTrashed()
+            ->where('slug', $slug)
+            ->when($ignoreId, fn ($query) => $query->whereKeyNot($ignoreId))
+            ->exists()) {
+            $slug = $base.'-'.$suffix++;
+        }
+
+        return $slug;
     }
 
     /**
@@ -55,8 +79,8 @@ class Blog extends Model
     public function scopePublished($query)
     {
         return $query->where('status', 'published')
-                     ->whereNotNull('published_at')
-                     ->where('published_at', '<=', now());
+            ->whereNotNull('published_at')
+            ->where('published_at', '<=', now());
     }
 
     /**
@@ -83,4 +107,3 @@ class Blog extends Model
         return media_url($this->featured_image);
     }
 }
-

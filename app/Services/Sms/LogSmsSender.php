@@ -13,7 +13,7 @@ class LogSmsSender implements SmsSender
 {
     public function send(string $phoneNumber, string $message): bool
     {
-        Log::info('[SMS:log driver] to ' . $phoneNumber . ' — ' . $message);
+        Log::info('[SMS:log driver] to '.$phoneNumber.' — '.$message);
 
         return true;
     }

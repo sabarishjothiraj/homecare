@@ -123,13 +123,13 @@
                                    class="form-control @error('featured_image') is-invalid @enderror"
                                    id="featured_image"
                                    name="featured_image"
-                                   accept="image/*"
+                                   accept="image/jpeg,image/png,image/gif,image/webp"
                                    data-validate="image"
                                    data-max-size="2048">
                             @error('featured_image')
                                 <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
-                            <small class="text-muted">Max size: 2MB</small>
+                            <small class="text-muted">JPG, PNG, GIF or WebP. Max size: 2MB</small>
                         </div>
                     </div>
                 </div>

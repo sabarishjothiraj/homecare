@@ -2,15 +2,20 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Contract extends Model
 {
     use HasFactory, SoftDeletes;
+
+    /**
+     * Largest value the DECIMAL(10,2) money columns can hold.
+     */
+    public const MAX_AMOUNT = 99999999.99;
 
     protected $fillable = [
         'contract_number',
@@ -23,10 +28,13 @@ class Contract extends Model
         'end_date',
         'amount',
         'payment_method',
+        'payment_details',
         'status',
         'terms',
         'pdf_path',
         'closure_reason',
+        'refund_amount',
+        'refund_details',
         'closed_at',
     ];
 
@@ -43,10 +51,10 @@ class Contract extends Model
     protected static function boot()
     {
         parent::boot();
-        
+
         static::creating(function ($contract) {
-            if (!$contract->contract_number) {
-                $contract->contract_number = 'CNT-' . strtoupper(uniqid());
+            if (! $contract->contract_number) {
+                $contract->contract_number = 'CNT-'.strtoupper(uniqid());
             }
         });
     }
@@ -204,13 +212,13 @@ class Contract extends Model
      */
     public function isExpiringSoon(): bool
     {
-        if (!$this->end_date) {
+        if (! $this->end_date) {
             return false;
         }
-        
+
         $alertDays = Setting::get('contract_alert_days', 7);
         $daysUntilExpiry = Carbon::now()->diffInDays($this->end_date, false);
-        
+
         return $daysUntilExpiry >= 0 && $daysUntilExpiry <= $alertDays;
     }
 
@@ -219,20 +227,22 @@ class Contract extends Model
      */
     public function isExpired(): bool
     {
-        if (!$this->end_date) {
+        if (! $this->end_date) {
             return false;
         }
-        
+
         return Carbon::now()->isAfter($this->end_date);
     }
 
     /**
      * Update contract status based on dates and assignments
+     *
+     * @return bool whether the status changed
      */
-    public function updateStatus(): void
+    public function updateStatus(): bool
     {
         if ($this->status === 'closed') {
-            return;
+            return false;
         }
 
         // Staffing is checked before the expiry window: an unstaffed contract
@@ -240,7 +250,8 @@ class Contract extends Model
         // happens to be inside the closing-soon alert period.
         if ($this->isExpired()) {
             $this->status = 'expired';
-        } elseif (!$this->assignments()->active()->exists()) {
+            $this->releaseAssignments();
+        } elseif (! $this->assignments()->active()->exists()) {
             $this->status = 'not_assigned';
         } elseif ($this->isExpiringSoon()) {
             $this->status = 'closing_soon';
@@ -248,7 +259,29 @@ class Contract extends Model
             $this->status = 'active';
         }
 
+        $changed = $this->isDirty('status');
+
         $this->save();
+
+        return $changed;
+    }
+
+    /**
+     * End every assignment still active on an expired contract.
+     *
+     * Availability checks key on is_active alone, so staff left active on a
+     * finished contract read as placed and could not be given new work.
+     */
+    protected function releaseAssignments(): void
+    {
+        $endDate = $this->end_date->toDateString();
+
+        // Nobody works past the contract, but an earlier end stays as recorded
+        $this->assignments()
+            ->where('is_active', true)
+            ->where(fn ($q) => $q->whereNull('end_date')->orWhereDate('end_date', '>', $endDate))
+            ->update(['end_date' => $endDate]);
+
+        $this->assignments()->where('is_active', true)->update(['is_active' => false]);
     }
 }
-

@@ -95,7 +95,7 @@ class StoreEmployeeRequest extends FormRequest
         $experience = $this->input('experience', []);
 
         foreach ($experience as $index => $row) {
-            if (!is_array($row) || !$this->hasAnyRowValue($row, [
+            if (! is_array($row) || ! $this->hasAnyRowValue($row, [
                 'company_name', 'job_title', 'employment_type', 'start_date', 'end_date', 'currently_working', 'last_salary', 'reason_for_leaving', 'responsibilities',
             ])) {
                 continue;
@@ -109,12 +109,12 @@ class StoreEmployeeRequest extends FormRequest
                 $validator->errors()->add("experience.$index.start_date", 'Start date is required when adding experience.');
             }
 
-            $currentlyWorking = !empty($row['currently_working']);
-            if (!$currentlyWorking && empty($row['end_date'])) {
+            $currentlyWorking = ! empty($row['currently_working']);
+            if (! $currentlyWorking && empty($row['end_date'])) {
                 $validator->errors()->add("experience.$index.end_date", 'End date is required unless currently working is selected.');
             }
 
-            if (!empty($row['start_date']) && !empty($row['end_date']) && $row['end_date'] < $row['start_date']) {
+            if (! empty($row['start_date']) && ! empty($row['end_date']) && $row['end_date'] < $row['start_date']) {
                 $validator->errors()->add("experience.$index.end_date", 'End date must be after or equal to start date.');
             }
         }
@@ -125,22 +125,22 @@ class StoreEmployeeRequest extends FormRequest
         $documents = $this->input('documents', []);
 
         foreach ($documents as $index => $row) {
-            if (!is_array($row)) {
+            if (! is_array($row)) {
                 continue;
             }
 
-            $hasType = !empty($row['type']);
+            $hasType = ! empty($row['type']);
             $hasFile = $this->hasFile("documents.$index.file");
 
-            if (!$hasType && !$hasFile) {
+            if (! $hasType && ! $hasFile) {
                 continue;
             }
 
-            if (!$hasType) {
+            if (! $hasType) {
                 $validator->errors()->add("documents.$index.type", 'Document type is required when uploading a document.');
             }
 
-            if (!$hasFile) {
+            if (! $hasFile) {
                 $validator->errors()->add("documents.$index.file", 'Document file is required when a document type is selected.');
             }
         }
@@ -150,9 +150,10 @@ class StoreEmployeeRequest extends FormRequest
     {
         foreach ($keys as $key) {
             if ($key === 'currently_working') {
-                if (!empty($row[$key])) {
+                if (! empty($row[$key])) {
                     return true;
                 }
+
                 continue;
             }
 

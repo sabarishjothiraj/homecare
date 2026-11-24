@@ -51,7 +51,7 @@
                             @foreach($fields as $field)
                             <tr>
                                 <td>
-                                    <span class="badge bg-secondary">{{ $field->display_order }}</span>
+                                    <span class="badge bg-secondary">{{ $field->order }}</span>
                                 </td>
                                 <td>
                                     <code>{{ $field->name }}</code>

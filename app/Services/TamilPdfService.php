@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Storage;
 use Mpdf\Config\ConfigVariables;
 use Mpdf\Config\FontVariables;
 use Mpdf\Mpdf;
@@ -29,8 +30,8 @@ class TamilPdfService
      */
     protected function makeMpdf(array $overrides = []): Mpdf
     {
-        $fontDirs = (new ConfigVariables())->getDefaults()['fontDir'];
-        $fontData = (new FontVariables())->getDefaults()['fontdata'];
+        $fontDirs = (new ConfigVariables)->getDefaults()['fontDir'];
+        $fontData = (new FontVariables)->getDefaults()['fontdata'];
 
         return new Mpdf(array_merge([
             'mode' => 'utf-8',
@@ -59,25 +60,33 @@ class TamilPdfService
     }
 
     /**
-     * Render a Blade view to a PDF file under storage/app/public.
+     * Render a Blade view to a PDF file on a storage disk.
      *
-     * @return string path relative to the public disk
+     * @return string path relative to the disk
      */
-    public function renderToFile(string $view, array $data, string $relativePath): string
+    public function renderToFile(string $view, array $data, string $relativePath, string $disk = 'local'): string
+    {
+        return $this->htmlToFile(view($view, $data)->render(), $relativePath, $data['document_title'] ?? 'Agreement', $disk);
+    }
+
+    /**
+     * Render already-built HTML to a PDF file on a storage disk.
+     *
+     * Defaults to the private 'local' disk (storage/app): agreements carry
+     * patient and staff details, and storage/app/public is served by the web
+     * server to anyone, with no login or permission check.
+     *
+     * @return string path relative to the disk
+     */
+    public function htmlToFile(string $html, string $relativePath, string $title = 'Agreement', string $disk = 'local'): string
     {
         $this->ensureTempDir();
 
         $mpdf = $this->makeMpdf();
-        $mpdf->SetTitle($data['document_title'] ?? 'Agreement');
-        $mpdf->WriteHTML(view($view, $data)->render());
+        $mpdf->SetTitle($title);
+        $mpdf->WriteHTML($html);
 
-        $absolute = storage_path('app/public/' . $relativePath);
-
-        if (!is_dir(dirname($absolute))) {
-            mkdir(dirname($absolute), 0755, true);
-        }
-
-        $mpdf->Output($absolute, Destination::FILE);
+        Storage::disk($disk)->put($relativePath, $mpdf->Output('', Destination::STRING_RETURN));
 
         return $relativePath;
     }
@@ -102,7 +111,7 @@ class TamilPdfService
     {
         $dir = storage_path('app/mpdf');
 
-        if (!is_dir($dir)) {
+        if (! is_dir($dir)) {
             mkdir($dir, 0755, true);
         }
     }

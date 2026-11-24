@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Patient;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class PatientController extends Controller
 {
@@ -27,10 +28,10 @@ class PatientController extends Controller
         // Search
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('phone', 'like', "%{$search}%");
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%");
             });
         }
 
@@ -54,8 +55,10 @@ class PatientController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|max:255|unique:patients,email',
-            'phone' => 'required|string|max:20',
+            // Deleted patients cannot be restored from the UI, so they must
+            // not keep holding their email against a returning patient.
+            'email' => ['required', 'email', 'max:255', Rule::unique('patients', 'email')->whereNull('deleted_at')],
+            'phone' => 'required|digits:10',
             'address1' => 'required|string|max:255',
             'address2' => 'nullable|string|max:255',
             'area' => 'nullable|string|max:255',
@@ -64,7 +67,7 @@ class PatientController extends Controller
             'country' => 'required|string|max:255',
             'pincode' => 'required|string|max:20',
             'emergency_contact_name' => 'nullable|string|max:255',
-            'emergency_contact_phone' => 'nullable|string|max:20',
+            'emergency_contact_phone' => 'nullable|digits:10',
             'medical_notes' => 'nullable|string',
             'is_active' => 'boolean',
         ]);
@@ -78,7 +81,7 @@ class PatientController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Patient created successfully.',
-                'redirect' => route('admin.patients.show', $patient)
+                'redirect' => route('admin.patients.show', $patient),
             ]);
         }
 
@@ -111,8 +114,8 @@ class PatientController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|max:255|unique:patients,email,' . $patient->id,
-            'phone' => 'required|string|max:20',
+            'email' => ['required', 'email', 'max:255', Rule::unique('patients', 'email')->ignore($patient->id)->whereNull('deleted_at')],
+            'phone' => 'required|digits:10',
             'address1' => 'required|string|max:255',
             'address2' => 'nullable|string|max:255',
             'area' => 'nullable|string|max:255',
@@ -121,7 +124,7 @@ class PatientController extends Controller
             'country' => 'required|string|max:255',
             'pincode' => 'required|string|max:20',
             'emergency_contact_name' => 'nullable|string|max:255',
-            'emergency_contact_phone' => 'nullable|string|max:20',
+            'emergency_contact_phone' => 'nullable|digits:10',
             'medical_notes' => 'nullable|string',
             'is_active' => 'boolean',
         ]);
@@ -134,7 +137,7 @@ class PatientController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Patient updated successfully.',
-                'redirect' => route('admin.patients.show', $patient)
+                'redirect' => route('admin.patients.show', $patient),
             ]);
         }
 
@@ -147,16 +150,19 @@ class PatientController extends Controller
      */
     public function destroy(Patient $patient)
     {
-        // Check if patient has active contracts
-        if ($patient->activeContracts()->exists()) {
+        // Expired contracts can still have staff placed or money owed, and
+        // deleting the patient would orphan them.
+        if ($patient->hasUnsettledContracts()) {
+            $message = 'Cannot delete a patient until all of their contracts are closed and no staff are still placed on them.';
+
             if (request()->wantsJson() || request()->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Cannot delete patient with active contracts.'
+                    'message' => $message,
                 ], 422);
             }
-            return redirect()->back()
-                ->with('error', 'Cannot delete patient with active contracts.');
+
+            return redirect()->back()->with('error', $message);
         }
 
         $patient->delete();
@@ -165,7 +171,7 @@ class PatientController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Patient deleted successfully.',
-                'redirect' => route('admin.patients.index')
+                'redirect' => route('admin.patients.index'),
             ]);
         }
 
@@ -173,4 +179,3 @@ class PatientController extends Controller
             ->with('success', 'Patient deleted successfully.');
     }
 }
-

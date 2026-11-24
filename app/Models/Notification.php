@@ -71,17 +71,19 @@ class Notification extends Model
     /**
      * Create contract expiring notification
      */
-    public static function createContractExpiringNotification(Contract $contract): void
+    public static function createContractExpiringNotification(Contract $contract): self
     {
-        $daysLeft = now()->diffInDays($contract->end_date);
-        
-        self::create([
+        $patientName = $contract->patient?->name ?? 'N/A';
+
+        // The date rather than "N days left", which is wrong from the next day on
+        return self::create([
             'type' => 'contract_expiring',
             'title' => 'Contract Expiring Soon',
-            'message' => "Contract {$contract->contract_number} for {$contract->patient->name} expires in {$daysLeft} days",
-            'link' => route('admin.contracts.show', $contract->id),
+            'message' => "Contract {$contract->contract_number} for patient {$patientName} will expire on {$contract->end_date->format('M d, Y')}.",
+            // Relative: the scheduler builds this, and its APP_URL may not be the host staff use
+            'link' => route('admin.contracts.show', $contract, false),
             'contract_id' => $contract->id,
+            'is_read' => false,
         ]);
     }
 }
-

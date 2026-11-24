@@ -15,6 +15,7 @@ class BannerController extends Controller
     public function index()
     {
         $banners = Banner::ordered()->paginate(10);
+
         return view('admin.banners.index', compact('banners'));
     }
 
@@ -35,11 +36,11 @@ class BannerController extends Controller
             'title' => 'required|string|max:255',
             'subtitle' => 'nullable|string|max:255',
             'image' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
-            'link' => 'nullable|url|max:255',
+            'link' => $this->linkRules(),
             'button_text' => 'nullable|string|max:50',
             'order' => 'required|integer|min:0',
             'is_active' => 'boolean',
-        ]);
+        ], $this->linkMessages());
 
         // Handle image upload
         if ($request->hasFile('image')) {
@@ -55,7 +56,7 @@ class BannerController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Banner created successfully.',
-                'redirect' => route('admin.banners.index')
+                'redirect' => route('admin.banners.index'),
             ]);
         }
 
@@ -80,16 +81,16 @@ class BannerController extends Controller
             'title' => 'required|string|max:255',
             'subtitle' => 'nullable|string|max:255',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-            'link' => 'nullable|url|max:255',
+            'link' => $this->linkRules(),
             'button_text' => 'nullable|string|max:50',
             'order' => 'required|integer|min:0',
             'is_active' => 'boolean',
-        ]);
+        ], $this->linkMessages());
 
         // Handle image upload
         if ($request->hasFile('image')) {
             // Delete old image
-            if ($banner->image && !str_starts_with($banner->image, 'http')) {
+            if ($banner->image && ! str_starts_with($banner->image, 'http')) {
                 Storage::disk('public')->delete($banner->image);
             }
             $imagePath = $request->file('image')->store('banners', 'public');
@@ -104,7 +105,7 @@ class BannerController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Banner updated successfully.',
-                'redirect' => route('admin.banners.index')
+                'redirect' => route('admin.banners.index'),
             ]);
         }
 
@@ -118,7 +119,7 @@ class BannerController extends Controller
     public function destroy(Banner $banner)
     {
         // Delete image
-        if ($banner->image && !str_starts_with($banner->image, 'http')) {
+        if ($banner->image && ! str_starts_with($banner->image, 'http')) {
             Storage::disk('public')->delete($banner->image);
         }
 
@@ -128,7 +129,7 @@ class BannerController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Banner deleted successfully.',
-                'redirect' => route('admin.banners.index')
+                'redirect' => route('admin.banners.index'),
             ]);
         }
 
@@ -141,18 +142,32 @@ class BannerController extends Controller
      */
     public function toggleStatus(Banner $banner)
     {
-        $banner->update(['is_active' => !$banner->is_active]);
+        $banner->update(['is_active' => ! $banner->is_active]);
 
         if (request()->wantsJson() || request()->ajax()) {
             return response()->json([
                 'success' => true,
                 'message' => 'Banner status updated successfully.',
-                'reload' => true
+                'reload' => true,
             ]);
         }
 
         return redirect()->route('admin.banners.index')
             ->with('success', 'Banner status updated successfully.');
     }
-}
 
+    /**
+     * A link is an absolute http(s) URL or a site path such as /services.
+     * Anything else (javascript:, data:, //host, /\host) is rejected;
+     * \x5C is a backslash, which browsers treat like a slash.
+     */
+    private function linkRules(): array
+    {
+        return ['nullable', 'string', 'max:255', 'regex:~^(https?://[^\s/\x5C?#]+|/(?![/\x5C]))[^\s\x5C]*$~iD'];
+    }
+
+    private function linkMessages(): array
+    {
+        return ['link.regex' => 'The link must be a full http(s) URL or a site path starting with /, e.g. /services.'];
+    }
+}

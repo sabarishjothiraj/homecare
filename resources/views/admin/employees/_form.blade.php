@@ -25,8 +25,18 @@
         $documents = [[]];
     }
 
+    // Uploads are private: link to them through the authenticated file routes.
     $employeeImagePath = $fieldData['employee_image_path'] ?? null;
-    $employeeImageUrl = $employeeImagePath ? Storage::url($employeeImagePath) : null;
+    $employeeImageUrl = ($isEdit && $employeeImagePath) ? route('admin.employees.photo', $employee) : null;
+
+    $storedDocumentIndexes = [];
+    if ($isEdit) {
+        foreach ($employee->uploadedDocuments() as $storedIndex => $storedDocument) {
+            if (is_string($storedDocument['file_path'] ?? null)) {
+                $storedDocumentIndexes[$storedDocument['file_path']] = $storedIndex;
+            }
+        }
+    }
 
     $sameAsPresent = old('same_as_present_address', false);
 
@@ -392,6 +402,7 @@
             @php
                 $existingFilePath = $document['file_path'] ?? ($document['existing_file'] ?? null);
                 $existingFileName = $document['file_name'] ?? ($document['existing_file_name'] ?? null);
+                $storedDocumentIndex = is_string($existingFilePath) ? ($storedDocumentIndexes[$existingFilePath] ?? null) : null;
             @endphp
             <div class="card border mb-3 document-item" data-index="{{ $index }}">
                 <div class="card-body">
@@ -414,9 +425,9 @@
                             <label class="form-label">File</label>
                             <input type="file" class="form-control @error("documents.$index.file") is-invalid @enderror" name="documents[{{ $index }}][file]" accept=".jpg,.jpeg,.png,.pdf">
                             @error("documents.$index.file")<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            @if($existingFilePath)
+                            @if($storedDocumentIndex !== null)
                                 <div class="small mt-2">
-                                    <a href="{{ Storage::url($existingFilePath) }}" target="_blank">Current: {{ $existingFileName ?: basename($existingFilePath) }}</a>
+                                    <a href="{{ route('admin.employees.documents.show', [$employee, $storedDocumentIndex]) }}" target="_blank">Current: {{ $existingFileName ?: basename($existingFilePath) }}</a>
                                 </div>
                             @endif
                             <input type="hidden" name="documents[{{ $index }}][existing_file]" value="{{ $existingFilePath }}">

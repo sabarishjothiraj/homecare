@@ -89,9 +89,9 @@
                     <label class="form-label">Status</label>
                     <select name="status" class="form-select">
                         <option value="">All Status</option>
-                        <option value="new" {{ request('status') === 'new' ? 'selected' : '' }}>New</option>
-                        <option value="approved" {{ request('status') === 'approved' ? 'selected' : '' }}>Approved</option>
-                        <option value="rejected" {{ request('status') === 'rejected' ? 'selected' : '' }}>Rejected</option>
+                        @foreach(\App\Models\JoinRequest::STATUSES as $value => $status)
+                            <option value="{{ $value }}" {{ request('status') === $value ? 'selected' : '' }}>{{ $status['label'] }}</option>
+                        @endforeach
                     </select>
                 </div>
                 <div class="col-md-2 d-flex align-items-end">
@@ -125,24 +125,18 @@
                             <tr class="{{ $request->status === 'new' ? 'table-primary' : '' }}">
                                 <td>#{{ $request->id }}</td>
                                 <td>
-                                    <strong>{{ $request->field_data['name'] ?? 'N/A' }}</strong>
+                                    <strong>{{ $request->applicantName() ?? 'N/A' }}</strong>
                                     @if($request->status === 'new')
                                         <span class="badge bg-danger ms-1">New</span>
                                     @endif
-                                    @if($request->converted_to_employee_id)
+                                    @if($request->employee_id)
                                         <br><small class="text-success"><i class="fas fa-check-circle"></i> Converted to Employee</small>
                                     @endif
                                 </td>
                                 <td>{{ $request->field_data['email'] ?? 'N/A' }}</td>
                                 <td>{{ $request->field_data['phone'] ?? '-' }}</td>
                                 <td>
-                                    @if($request->status === 'new')
-                                        <span class="badge bg-primary">New</span>
-                                    @elseif($request->status === 'approved')
-                                        <span class="badge bg-success">Approved</span>
-                                    @else
-                                        <span class="badge bg-danger">Rejected</span>
-                                    @endif
+                                    <span class="badge bg-{{ $request->statusTone() }}">{{ $request->statusLabel() }}</span>
                                 </td>
                                 <td>{{ $request->created_at->format('M d, Y') }}</td>
                                 <td>

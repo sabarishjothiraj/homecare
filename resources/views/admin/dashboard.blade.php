@@ -3,6 +3,16 @@
 @section('title', 'Dashboard')
 
 @section('content')
+@php
+    // Panels are only built for users who can open the module behind them (see DashboardController)
+    $statusColors = [
+        'active' => 'success',
+        'not_assigned' => 'warning',
+        'closing_soon' => 'orange',
+        'expired' => 'danger',
+        'closed' => 'secondary',
+    ];
+@endphp
 <div class="container-fluid">
     <!-- Page Header -->
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -15,8 +25,19 @@
         </div>
     </div>
 
+    @if (! in_array(true, $show, true))
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body text-center text-muted py-5">
+                <i class="fas fa-th-large fa-3x mb-3 d-block opacity-25"></i>
+                <p class="mb-0">There are no dashboard panels for your role. Use the menu to open the sections you work in.</p>
+            </div>
+        </div>
+    @endif
+
     <!-- Statistics Cards Row 1 -->
+    @if ($show['patients'] || $show['employees'] || $show['contracts'] || $show['payments'])
     <div class="row g-3 mb-4">
+        @if ($show['patients'])
         <!-- Total Patients -->
         <div class="col-md-3">
             <div class="card border-0 shadow-sm h-100">
@@ -36,7 +57,9 @@
                 </div>
             </div>
         </div>
+        @endif
 
+        @if ($show['employees'])
         <!-- Total Employees -->
         <div class="col-md-3">
             <div class="card border-0 shadow-sm h-100">
@@ -56,7 +79,9 @@
                 </div>
             </div>
         </div>
+        @endif
 
+        @if ($show['contracts'])
         <!-- Active Contracts -->
         <div class="col-md-3">
             <div class="card border-0 shadow-sm h-100">
@@ -66,7 +91,7 @@
                             <p class="text-muted mb-1 small">Active Contracts</p>
                             <h3 class="mb-0">{{ $contractStats['active'] ?? 0 }}</h3>
                             <small class="text-warning">
-                                <i class="fas fa-clock me-1"></i>{{ $contractStats['pending'] ?? 0 }} Pending
+                                <i class="fas fa-user-clock me-1"></i>{{ $contractStats['not_assigned'] ?? 0 }} Not Assigned
                             </small>
                         </div>
                         <div class="bg-info bg-opacity-10 p-3 rounded">
@@ -76,7 +101,9 @@
                 </div>
             </div>
         </div>
+        @endif
 
+        @if ($show['payments'])
         <!-- Total Revenue -->
         <div class="col-md-3">
             <div class="card border-0 shadow-sm h-100">
@@ -96,10 +123,14 @@
                 </div>
             </div>
         </div>
+        @endif
     </div>
+    @endif
 
     <!-- Statistics Cards Row 2 -->
+    @if ($show['employees'] || $show['contracts'] || $show['payments'])
     <div class="row g-3 mb-4">
+        @if ($show['employees'])
         <!-- Pending Employees -->
         <div class="col-md-3">
             <div class="card border-0 shadow-sm">
@@ -121,7 +152,9 @@
                 </div>
             </div>
         </div>
+        @endif
 
+        @if ($show['contracts'])
         <!-- Expiring Contracts -->
         <div class="col-md-3">
             <div class="card border-0 shadow-sm">
@@ -132,7 +165,9 @@
                 </div>
             </div>
         </div>
+        @endif
 
+        @if ($show['payments'])
         <!-- 30 Days Revenue -->
         <div class="col-md-3">
             <div class="card border-0 shadow-sm">
@@ -143,69 +178,124 @@
                 </div>
             </div>
         </div>
+        @endif
     </div>
+    @endif
 
+    @if ($show['payments'])
+    <!-- Refund Statistics -->
     <div class="row g-3 mb-4">
+        <!-- Total Refunds -->
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-muted mb-1 small">Total Refunds</p>
+                            <h3 class="mb-0 text-danger">₹{{ number_format($totalRefunds, 0) }}</h3>
+                            <small class="text-muted">
+                                <i class="fas fa-file-contract me-1"></i>{{ $refundCount }} {{ Str::plural('Contract', $refundCount) }} refunded
+                            </small>
+                        </div>
+                        <div class="bg-danger bg-opacity-10 p-3 rounded">
+                            <i class="fas fa-undo-alt fa-2x text-danger"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Refunds Last 30 Days -->
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-muted mb-1 small">Refunds (Last 30 Days)</p>
+                            <h3 class="mb-0">₹{{ number_format($last30DaysRefunds, 0) }}</h3>
+                            <small class="text-muted">
+                                <i class="fas fa-calendar-alt me-1"></i>Based on contract closure date
+                            </small>
+                        </div>
+                        <div class="bg-secondary bg-opacity-10 p-3 rounded">
+                            <i class="fas fa-hand-holding-usd fa-2x text-secondary"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Net Revenue -->
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-muted mb-1 small">Net Revenue</p>
+                            <h3 class="mb-0 text-success">₹{{ number_format($netRevenue, 0) }}</h3>
+                            <small class="text-muted">
+                                <i class="fas fa-minus-circle me-1"></i>Revenue after refunds
+                            </small>
+                        </div>
+                        <div class="bg-success bg-opacity-10 p-3 rounded">
+                            <i class="fas fa-wallet fa-2x text-success"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
+
+    @if ($show['payments'] || $show['contracts'])
+    <div class="row g-3 mb-4">
+        @if ($show['payments'])
         <!-- Monthly Revenue Chart -->
         <div class="col-md-8">
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-white">
-                    <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Monthly Revenue (Last 6 Months)</h5>
+                    <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Monthly Revenue &amp; Refunds (Last 6 Months)</h5>
                 </div>
                 <div class="card-body">
                     <canvas id="revenueChart" height="80"></canvas>
                 </div>
             </div>
         </div>
+        @endif
 
+        @if ($show['contracts'])
         <!-- Contract Status Distribution -->
         <div class="col-md-4">
             <div class="card border-0 shadow-sm">
-                <div class="card-header bg-white">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
                     <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Contract Status</h5>
+                    <small class="text-muted">{{ $contractStats['total'] ?? 0 }} total</small>
                 </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between mb-1">
-                            <span>Active</span>
-                            <strong class="text-success">{{ $contractStats['active'] ?? 0 }}</strong>
+                <div class="card-body contract-status">
+                    @php $contractTotal = $contractStats['total'] ?? 0; @endphp
+                    @foreach (\App\Services\ReportService::CONTRACT_STATUSES as $status => $label)
+                        @php
+                            $statusCount = $contractStats[$status] ?? 0;
+                            $color = $statusColors[$status] ?? 'secondary';
+                        @endphp
+                        <div class="{{ $loop->last ? '' : 'mb-3' }}">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>{{ $label }}</span>
+                                <strong class="text-{{ $color }}">{{ $statusCount }}</strong>
+                            </div>
+                            <div class="progress" style="height: 8px;">
+                                <div class="progress-bar bg-{{ $color }}" style="width: {{ $contractTotal > 0 ? round($statusCount / $contractTotal * 100, 1) : 0 }}%"></div>
+                            </div>
                         </div>
-                        <div class="progress" style="height: 8px;">
-                            <div class="progress-bar bg-success" style="width: {{ ($contractStats['total'] ?? 0) > 0 ? (($contractStats['active'] ?? 0) / ($contractStats['total'] ?? 0) * 100) : 0 }}%"></div>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between mb-1">
-                            <span>Pending</span>
-                            <strong class="text-warning">{{ $contractStats['pending'] ?? 0 }}</strong>
-                        </div>
-                        <div class="progress" style="height: 8px;">
-                            <div class="progress-bar bg-warning" style="width: {{ ($contractStats['total'] ?? 0) > 0 ? (($contractStats['pending'] ?? 0) / ($contractStats['total'] ?? 0) * 100) : 0 }}%"></div>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between mb-1">
-                            <span>Completed</span>
-                            <strong class="text-info">{{ $contractStats['completed'] ?? 0 }}</strong>
-                        </div>
-                        <div class="progress" style="height: 8px;">
-                            <div class="progress-bar bg-info" style="width: {{ ($contractStats['total'] ?? 0) > 0 ? (($contractStats['completed'] ?? 0) / ($contractStats['total'] ?? 0) * 100) : 0 }}%"></div>
-                        </div>
-                    </div>
-                    <div>
-                        <div class="d-flex justify-content-between mb-1">
-                            <span>Cancelled</span>
-                            <strong class="text-danger">{{ $contractStats['cancelled'] ?? 0 }}</strong>
-                        </div>
-                        <div class="progress" style="height: 8px;">
-                            <div class="progress-bar bg-danger" style="width: {{ ($contractStats['total'] ?? 0) > 0 ? (($contractStats['cancelled'] ?? 0) / ($contractStats['total'] ?? 0) * 100) : 0 }}%"></div>
-                        </div>
-                    </div>
+                    @endforeach
                 </div>
             </div>
         </div>
+        @endif
     </div>
+    @endif
 
+    @if ($show['contracts'])
     <div class="row g-3 mb-4">
         <!-- Recent Contracts -->
         <div class="col-md-6">
@@ -231,18 +321,8 @@
                                     <tr>
                                         <td>{{ $contract->patient->name ?? 'N/A' }}</td>
                                         <td>{{ $contract->service->name ?? 'N/A' }}</td>
-                                        <td>
-                                            @if($contract->status === 'active')
-                                                <span class="badge bg-success">Active</span>
-                                            @elseif($contract->status === 'pending')
-                                                <span class="badge bg-warning">Pending</span>
-                                            @elseif($contract->status === 'completed')
-                                                <span class="badge bg-info">Completed</span>
-                                            @else
-                                                <span class="badge bg-danger">{{ ucfirst($contract->status) }}</span>
-                                            @endif
-                                        </td>
-                                        <td>₹{{ number_format($contract->total_amount, 0) }}</td>
+                                        <td>{!! contract_status_badge($contract->status) !!}</td>
+                                        <td>₹{{ number_format((float) $contract->amount, 0) }}</td>
                                     </tr>
                                     @endforeach
                                 </tbody>
@@ -279,13 +359,24 @@
                                 </thead>
                                 <tbody>
                                     @foreach($expiringContracts->take(5) as $contract)
+                                    @php
+                                        // Whole calendar days from today; diffInDays(now()) floors
+                                        // against the current time, so tomorrow showed as 0
+                                        $daysLeft = (int) today()->diffInDays($contract->end_date->copy()->startOfDay(), false);
+                                    @endphp
                                     <tr>
                                         <td>{{ $contract->patient->name ?? 'N/A' }}</td>
                                         <td>{{ $contract->service->name ?? 'N/A' }}</td>
                                         <td>{{ $contract->end_date->format('M d, Y') }}</td>
                                         <td>
                                             <span class="badge bg-danger">
-                                                {{ $contract->end_date->diffInDays(now()) }} days
+                                                @if ($daysLeft < 0)
+                                                    Ended
+                                                @elseif ($daysLeft === 0)
+                                                    Ends today
+                                                @else
+                                                    {{ $daysLeft }} {{ Str::plural('day', $daysLeft) }}
+                                                @endif
                                             </span>
                                         </td>
                                     </tr>
@@ -303,7 +394,9 @@
             </div>
         </div>
     </div>
+    @endif
 
+    @if ($show['queries'])
     <div class="row g-3">
         <!-- Recent Contact Queries -->
         <div class="col-md-6">
@@ -349,11 +442,19 @@
                     @if($recentJoinRequests->count() > 0)
                         <div class="list-group list-group-flush">
                             @foreach($recentJoinRequests as $request)
+                            @php
+                                // Applicant details live in field_data, keyed by the configured employee fields
+                                $applicantName = trim($request->getField('first_name', '').' '.$request->getField('last_name', ''))
+                                    ?: ($request->getField('name') ?: 'Applicant #'.$request->id);
+                                $applicantContact = collect([$request->getField('email'), $request->getField('phone')])->filter()->join(' • ');
+                            @endphp
                             <a href="{{ route('admin.join-requests.show', $request) }}" class="list-group-item list-group-item-action">
                                 <div class="d-flex justify-content-between align-items-start">
                                     <div>
-                                        <h6 class="mb-1">{{ $request->name }}</h6>
-                                        <p class="mb-1 small text-muted">{{ $request->email }} • {{ $request->phone }}</p>
+                                        <h6 class="mb-1">{{ $applicantName }}</h6>
+                                        @if ($applicantContact !== '')
+                                            <p class="mb-1 small text-muted">{{ $applicantContact }}</p>
+                                        @endif
                                         <small class="text-muted">{{ $request->created_at->diffForHumans() }}</small>
                                     </div>
                                     <span class="badge bg-success">New</span>
@@ -371,8 +472,17 @@
             </div>
         </div>
     </div>
+    @endif
 </div>
 
+@push('styles')
+<style>
+    .contract-status .bg-orange { background-color: #fd7e14 !important; }
+    .contract-status .text-orange { color: #fd7e14 !important; }
+</style>
+@endpush
+
+@if ($show['payments'])
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
@@ -391,6 +501,13 @@
                 borderColor: 'rgba(52, 152, 219, 1)',
                 borderWidth: 1,
                 borderRadius: 5
+            }, {
+                label: 'Refunds (₹)',
+                data: monthlyData.map(item => item.refund),
+                backgroundColor: 'rgba(231, 76, 60, 0.8)',
+                borderColor: 'rgba(231, 76, 60, 1)',
+                borderWidth: 1,
+                borderRadius: 5
             }]
         },
         options: {
@@ -398,12 +515,13 @@
             maintainAspectRatio: true,
             plugins: {
                 legend: {
-                    display: false
+                    display: true,
+                    position: 'top'
                 },
                 tooltip: {
                     callbacks: {
                         label: function(context) {
-                            return '₹' + context.parsed.y.toLocaleString('en-IN');
+                            return context.dataset.label.replace(' (₹)', '') + ': ₹' + context.parsed.y.toLocaleString('en-IN');
                         }
                     }
                 }
@@ -422,5 +540,5 @@
     });
 </script>
 @endpush
+@endif
 @endsection
-

@@ -8,14 +8,11 @@ use Symfony\Component\HttpFoundation\Response;
 
 class PermissionMiddleware
 {
-    /**
-     * @param  string  ...$permissions
-     */
     public function handle(Request $request, Closure $next, string ...$permissions): Response
     {
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             if ($request->expectsJson()) {
                 return response()->json(['message' => 'Unauthenticated.'], 401);
             }
@@ -24,7 +21,8 @@ class PermissionMiddleware
                 ->with('error', 'Please login to access the admin panel.');
         }
 
-        foreach ($permissions as $permission) {
+        // A deactivated account holds no permission, whichever guard let it in.
+        foreach ($user->is_active ? $permissions : [] as $permission) {
             if ($user->hasPermission($permission)) {
                 return $next($request);
             }

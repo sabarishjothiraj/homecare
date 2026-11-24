@@ -86,7 +86,26 @@
                             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                         </div>
                         @endif
-                        
+
+                        {{-- e.g. the public-forms rate limit after too many submissions --}}
+                        @if(session('error'))
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <i class="fas fa-exclamation-circle me-2"></i>{{ session('error') }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                        @endif
+
+                        @if($errors->any())
+                        <div class="alert alert-danger" role="alert">
+                            <i class="fas fa-exclamation-circle me-2"></i>Your application was not sent. Please correct the following:
+                            <ul class="mb-0 mt-2">
+                                @foreach($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                        @endif
+
                         <form action="{{ route('join.store') }}" method="POST">
                             @csrf
                             
@@ -107,13 +126,13 @@
                                               rows="4"
                                               {{ $field->is_required ? 'required' : '' }}>{{ old($field->name) }}</textarea>
 
-                                    @elseif($field->type === 'select' && $field->options)
+                                    @elseif($field->type === 'select' && count($field->optionList()) > 0)
                                     <select class="form-select @error($field->name) is-invalid @enderror"
                                             id="{{ $field->name }}"
                                             name="{{ $field->name }}"
                                             {{ $field->is_required ? 'required' : '' }}>
                                         <option value="">Select {{ $field->label }}</option>
-                                        @foreach($field->options as $option)
+                                        @foreach($field->optionList() as $option)
                                         <option value="{{ $option }}" {{ old($field->name) == $option ? 'selected' : '' }}>
                                             {{ $option }}
                                         </option>

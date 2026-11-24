@@ -11,9 +11,11 @@
     $line = fn ($value, $len = 40) => $value ?: str_repeat('.', $len);
     $patientName = $contract?->patient?->name;
     $items = $contract?->items ?? collect();
-    $assignments = $contract?->assignments->where('is_active', true) ?? collect();
-    $firstAssignment = $assignments->first();
-    $employee = $firstAssignment?->employee;
+    // Every staffed service line, not just the first
+    $assignments = ($contract?->assignments ?? collect())->where('is_active', true)->whereNull('cover_for_assignment_id')->values();
+    $employeeNames = $assignments->map(fn ($assignment) => trim((string) $assignment->employee?->getField('name', '')))->filter()->join(', ');
+    // Contract-specific terms (null when the contract only has the generic defaults)
+    $specialTerms = $special_terms ?? null;
 @endphp
 <style>
     @page { margin: 6mm; }
@@ -158,6 +160,7 @@
     }
     .small-note { font-size: 7.4pt; color: #333; margin-top: 1.5mm; }
     .fill { border-bottom: 0.25mm dotted #444; }
+    .worker-no { font-size: 8.6pt; font-weight: bold; margin-top: 2.5mm; }
 </style>
 
 <div class="sheet">
@@ -292,8 +295,15 @@
         </tr>
         <tr>
             <td class="num">18.</td>
-            <td class="body">வாடிக்கையாளராகிய நான் <b>(Party - 2 {{ $patientName ? e($patientName) : '...........................................' }})</b> எனது சுயவிருப்பத்தோடு மேற்கூறிய அனைத்து நிபந்தனைகளையும் ஏற்று இந்த சேவையை பெற்றுக் கொள்கிறேன். மேலும் மேற்கூறிய அனைத்து நிபந்தனைகளில் ஏதேனும் ஒன்றை மீறும்பட்சத்தில் நிறுவனத்திற்கு ஏற்படும் அனைத்து விளைவுகளுக்கும் நான் பொறுப்பேற்றுக் கொள்கிறேன்.</td>
+            <td class="body">வாடிக்கையாளராகிய நான் <b>(Party - 2 {{ $patientName ?: '...........................................' }})</b> எனது சுயவிருப்பத்தோடு மேற்கூறிய அனைத்து நிபந்தனைகளையும் ஏற்று இந்த சேவையை பெற்றுக் கொள்கிறேன். மேலும் மேற்கூறிய அனைத்து நிபந்தனைகளில் ஏதேனும் ஒன்றை மீறும்பட்சத்தில் நிறுவனத்திற்கு ஏற்படும் அனைத்து விளைவுகளுக்கும் நான் பொறுப்பேற்றுக் கொள்கிறேன்.</td>
         </tr>
+        @if($specialTerms)
+            {{-- Terms written for this contract on the create / edit form --}}
+            <tr>
+                <td class="num">19.</td>
+                <td class="body"><b>கூடுதல் நிபந்தனைகள் (Special Terms) :</b><br>{!! nl2br(e($specialTerms)) !!}</td>
+            </tr>
+        @endif
     </table>
 
     <div class="party"><b>Party 1 :</b> <span class="label">Sri Muruga Home Nursing</span></div>
@@ -301,21 +311,28 @@
 
     <div class="section-bar">வேலையாட்கள் விபரம்</div>
 
-    <table class="detail-table">
-        <tr><td class="k">பெயர்</td><td class="c">:</td><td class="v">{{ $employee ? e(trim($employee->getField('first_name') . ' ' . $employee->getField('last_name'))) : '' }}</td></tr>
-        <tr><td class="k">வயது</td><td class="c">:</td><td class="v">&nbsp;</td></tr>
-        <tr><td class="k">க.பெயர் /த.பெயர்</td><td class="c">:</td><td class="v">&nbsp;</td></tr>
-        <tr><td class="k">தொலைபேசி எண்– 1</td><td class="c">:</td><td class="v">{{ $employee ? e($employee->getField('phone')) : '' }}</td></tr>
-        <tr><td class="k">தொலைபேசி எண்– 2</td><td class="c">:</td><td class="v">&nbsp;</td></tr>
-        <tr><td class="k">பெயர்</td><td class="c">:</td><td class="v">&nbsp;</td></tr>
-        <tr><td class="k">தொலைபேசி</td><td class="c">:</td><td class="v">&nbsp;</td></tr>
-        <tr><td class="k">அனுபவம் / செய்ய தெரிந்த வேலை</td><td class="c">:</td><td class="v">{{ $firstAssignment?->service?->name }}</td></tr>
-        <tr>
-            <td class="k">அடையாள அட்டை</td><td class="c">:</td>
-            <td>&#9744; Aadhaar &nbsp;/&nbsp; &#9744; Voter ID &nbsp;/&nbsp; &#9744; DL &nbsp;/&nbsp; &#9744; Ration Card</td>
-        </tr>
-        <tr><td class="k">அடையாள அட்டை எண்</td><td class="c">:</td><td class="v">&nbsp;</td></tr>
-    </table>
+    {{-- One block per staffed service line; a single blank block when nobody is assigned --}}
+    @foreach($assignments->isNotEmpty() ? $assignments : collect([null]) as $assignment)
+        @php $employee = $assignment?->employee; @endphp
+        @if($assignments->count() > 1)
+            <div class="worker-no">{{ $loop->iteration }}. {{ $assignment->service?->name }}</div>
+        @endif
+        <table class="detail-table">
+            <tr><td class="k">பெயர்</td><td class="c">:</td><td class="v">{{ $employee ? trim($employee->getField('name', '')) : '' }}</td></tr>
+            <tr><td class="k">வயது</td><td class="c">:</td><td class="v">&nbsp;</td></tr>
+            <tr><td class="k">க.பெயர் /த.பெயர்</td><td class="c">:</td><td class="v">&nbsp;</td></tr>
+            <tr><td class="k">தொலைபேசி எண்– 1</td><td class="c">:</td><td class="v">{{ $employee?->getField('phone') }}</td></tr>
+            <tr><td class="k">தொலைபேசி எண்– 2</td><td class="c">:</td><td class="v">&nbsp;</td></tr>
+            <tr><td class="k">பெயர்</td><td class="c">:</td><td class="v">&nbsp;</td></tr>
+            <tr><td class="k">தொலைபேசி</td><td class="c">:</td><td class="v">&nbsp;</td></tr>
+            <tr><td class="k">அனுபவம் / செய்ய தெரிந்த வேலை</td><td class="c">:</td><td class="v">{{ $assignment?->service?->name }}</td></tr>
+            <tr>
+                <td class="k">அடையாள அட்டை</td><td class="c">:</td>
+                <td>&#9744; Aadhaar &nbsp;/&nbsp; &#9744; Voter ID &nbsp;/&nbsp; &#9744; DL &nbsp;/&nbsp; &#9744; Ration Card</td>
+            </tr>
+            <tr><td class="k">அடையாள அட்டை எண்</td><td class="c">:</td><td class="v">&nbsp;</td></tr>
+        </table>
+    @endforeach
 
     <div class="small-note">
         தாங்கள் கேட்டுக்கொண்டபடி தாங்கள் கூட்டிச் செல்லப்படும் நர்ஸ்கள் செய்ய வேண்டிய வேலைகள், நோயாளியின் நோய் விபரங்கள்
@@ -335,7 +352,7 @@
 
     <div class="small-note">
         தங்களின் நிபந்தனைகளை படித்துப் பார்த்தேன். தங்களின் நிபந்தனைப்படி கூட்டிச் செல்லும் நர்ஸ்
-        <span class="fill">{{ $employee ? e(trim($employee->getField('first_name') . ' ' . $employee->getField('last_name'))) : str_repeat('.', 55) }}</span>
+        <span class="fill">{{ $employeeNames ?: str_repeat('.', 55) }}</span>
         யை நல்ல முறையில் பாதுகாப்பு அளிப்பேன் என்று உறுதி கூறுகிறேன்.
     </div>
 

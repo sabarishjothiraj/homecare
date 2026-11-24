@@ -19,8 +19,8 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::table('otp_verifications', function (Blueprint $table) {
-            $table->string('sent_to', 20)->nullable()->change();
-        });
+        // Intentionally a no-op. Shrinking back to 20 fails under strict mode
+        // once an email destination has been stored, and truncating it would
+        // corrupt the audit trail. varchar(255) holds everything 20 did.
     }
 };

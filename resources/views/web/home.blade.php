@@ -223,7 +223,10 @@
 
     .hero-stat-grid {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        /* minmax(0, 1fr) rather than 1fr: a bare 1fr track keeps
+           min-width:auto, so a long unbreakable label pushes the grid wider
+           than its container and overflows the page on narrow screens. */
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 0.75rem;
     }
 
@@ -236,6 +239,7 @@
     }
     .hero-stat strong {
         display: block;
+        overflow-wrap: anywhere;
         font-family: var(--font-display);
         font-size: 1.5rem;
         font-weight: 800;
@@ -408,7 +412,7 @@
                             <span>Verified</span>
                         </div>
                         <div class="hero-stat">
-                            <strong>At&nbsp;home</strong>
+                            <strong>At home</strong>
                             <span>Delivered</span>
                         </div>
                     </div>

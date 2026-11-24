@@ -1,12 +1,12 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Web\HomeController;
 use App\Http\Controllers\Web\AboutController;
-use App\Http\Controllers\Web\ContactController;
-use App\Http\Controllers\Web\ServiceController;
-use App\Http\Controllers\Web\JoinController;
 use App\Http\Controllers\Web\BlogController;
+use App\Http\Controllers\Web\ContactController;
+use App\Http\Controllers\Web\HomeController;
+use App\Http\Controllers\Web\JoinController;
+use App\Http\Controllers\Web\ServiceController;
+use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
@@ -14,19 +14,14 @@ use App\Http\Controllers\Web\BlogController;
 |--------------------------------------------------------------------------
 */
 
-// Welcome/Test Route (remove this after creating views)
-Route::get('/welcome', function () {
-    return view('welcome');
-});
-
 // Public Website Routes
 Route::get('/', [HomeController::class, 'index'])->name('home');
 Route::get('/about', [AboutController::class, 'index'])->name('about');
 Route::get('/contact', [ContactController::class, 'index'])->name('contact');
-Route::post('/contact', [ContactController::class, 'store'])->name('contact.store');
+Route::post('/contact', [ContactController::class, 'store'])->middleware('throttle:public-forms')->name('contact.store');
 Route::get('/services', [ServiceController::class, 'index'])->name('services');
 Route::get('/join', [JoinController::class, 'index'])->name('join');
-Route::post('/join', [JoinController::class, 'store'])->name('join.store');
+Route::post('/join', [JoinController::class, 'store'])->middleware('throttle:public-forms')->name('join.store');
 Route::get('/blogs', [BlogController::class, 'index'])->name('blogs.index');
 Route::get('/blogs/{slug}', [BlogController::class, 'show'])->name('blogs.show');
 
@@ -37,4 +32,3 @@ Route::get('/blogs/{slug}', [BlogController::class, 'show'])->name('blogs.show')
 */
 
 require __DIR__.'/admin.php';
-

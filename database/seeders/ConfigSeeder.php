@@ -14,7 +14,10 @@ class ConfigSeeder extends Seeder
     {
         // Destinations for the login OTP. Both start blank: until one is set
         // from the admin panel, OTP logins are refused rather than bypassed.
-        Config::setValue('otp_phone_number', '');
-        Config::setValue('otp_email', '');
+        // Only missing rows are created, so re-running db:seed never blanks a
+        // destination the owner has set.
+        foreach (['otp_phone_number', 'otp_email'] as $key) {
+            Config::firstOrCreate(['key' => $key], ['value' => '']);
+        }
     }
 }

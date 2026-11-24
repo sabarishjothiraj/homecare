@@ -20,8 +20,7 @@ class OtpMessage
         public readonly int $expiresInMinutes,
         public readonly CarbonInterface $requestedAt,
         public readonly ?string $ipAddress = null,
-    ) {
-    }
+    ) {}
 
     /**
      * Best available display name for the person logging in.
@@ -42,7 +41,7 @@ class OtpMessage
             $this->user->email,
             config('app.name', 'Home Nursing'),
             $this->requestedAt->format('d M Y, g:i A'),
-            $this->ipAddress ? ' from ' . $this->ipAddress : '',
+            $this->ipAddress ? ' from '.$this->ipAddress : '',
             $this->code,
             $this->expiresInMinutes,
         );

@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
 use App\Services\ContractService;
+use Illuminate\Console\Command;
 
 class UpdateContractStatuses extends Command
 {
@@ -46,4 +46,3 @@ class UpdateContractStatuses extends Command
         return Command::SUCCESS;
     }
 }
-

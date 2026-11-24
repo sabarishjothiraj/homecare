@@ -16,7 +16,7 @@ return new class extends Migration
             [$database, $table, $indexName]
         );
 
-        return !empty($rows);
+        return ! empty($rows);
     }
 
     /**
@@ -25,19 +25,19 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('employees', function (Blueprint $table) {
-            if (!Schema::hasColumn('employees', 'first_name')) {
+            if (! Schema::hasColumn('employees', 'first_name')) {
                 $table->string('first_name')->nullable()->after('id');
             }
-            if (!Schema::hasColumn('employees', 'last_name')) {
+            if (! Schema::hasColumn('employees', 'last_name')) {
                 $table->string('last_name')->nullable()->after('first_name');
             }
-            if (!Schema::hasColumn('employees', 'email')) {
+            if (! Schema::hasColumn('employees', 'email')) {
                 $table->string('email')->nullable()->after('last_name');
             }
-            if (!Schema::hasColumn('employees', 'phone')) {
+            if (! Schema::hasColumn('employees', 'phone')) {
                 $table->string('phone')->nullable()->after('email');
             }
-            if (!Schema::hasColumn('employees', 'alternate_phone')) {
+            if (! Schema::hasColumn('employees', 'alternate_phone')) {
                 $table->string('alternate_phone')->nullable()->after('phone');
             }
         });
@@ -45,7 +45,7 @@ return new class extends Migration
         DB::table('employees')->orderBy('id')->chunkById(100, function ($employees) {
             foreach ($employees as $employee) {
                 $fieldData = json_decode($employee->field_data ?? '{}', true);
-                if (!is_array($fieldData)) {
+                if (! is_array($fieldData)) {
                     $fieldData = [];
                 }
 
@@ -55,7 +55,7 @@ return new class extends Migration
                 $phone = $fieldData['phone'] ?? null;
                 $alternatePhone = $fieldData['alternate_phone'] ?? null;
 
-                if (!$firstName && !empty($fieldData['name'])) {
+                if (! $firstName && ! empty($fieldData['name'])) {
                     $parts = preg_split('/\s+/', trim((string) $fieldData['name'])) ?: [];
                     $firstName = $parts[0] ?? null;
                     $lastName = count($parts) > 1 ? implode(' ', array_slice($parts, 1)) : null;
@@ -78,10 +78,10 @@ return new class extends Migration
         $this->deduplicateColumnValues('employees', 'phone');
 
         Schema::table('employees', function (Blueprint $table) {
-            if (!$this->indexExists('employees', 'employees_email_unique')) {
+            if (! $this->indexExists('employees', 'employees_email_unique')) {
                 $table->unique('email');
             }
-            if (!$this->indexExists('employees', 'employees_phone_unique')) {
+            if (! $this->indexExists('employees', 'employees_phone_unique')) {
                 $table->unique('phone');
             }
         });
@@ -105,7 +105,7 @@ return new class extends Migration
                 ->all();
 
             $idsToNull = array_slice($ids, 1);
-            if (!empty($idsToNull)) {
+            if (! empty($idsToNull)) {
                 DB::table($table)
                     ->whereIn('id', $idsToNull)
                     ->update([$column => null]);
@@ -131,7 +131,7 @@ return new class extends Migration
                     $dropColumns[] = $column;
                 }
             }
-            if (!empty($dropColumns)) {
+            if (! empty($dropColumns)) {
                 $table->dropColumn($dropColumns);
             }
         });

@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
-use App\Models\Service;
-use App\Models\Blog;
-use App\Models\Setting;
 use App\Models\Banner;
+use App\Models\Blog;
+use App\Models\Service;
+use App\Models\Setting;
 
 class HomeController extends Controller
 {
@@ -42,4 +42,3 @@ class HomeController extends Controller
         ));
     }
 }
-

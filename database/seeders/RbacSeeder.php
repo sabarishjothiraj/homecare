@@ -6,6 +6,7 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class RbacSeeder extends Seeder
@@ -44,13 +45,15 @@ class RbacSeeder extends Seeder
             ['name' => 'Admin', 'slug' => 'admin', 'description' => 'Restricted administrative access'],
         ];
 
+        // is_active is left to the column default on create and never reset
+        // on a re-run: a role the owner deactivated stays deactivated.
+        // withTrashed() so a deleted role is not re-inserted over its slug.
         foreach ($roles as $roleData) {
-            Role::updateOrCreate(
+            Role::withTrashed()->updateOrCreate(
                 ['slug' => $roleData['slug']],
                 [
                     'name' => $roleData['name'],
                     'description' => $roleData['description'],
-                    'is_active' => true,
                 ]
             );
         }
@@ -73,12 +76,11 @@ class RbacSeeder extends Seeder
         $permissions = array_merge($permissions, $this->adminPermissions);
 
         foreach ($permissions as $permissionSlug) {
-            Permission::updateOrCreate(
+            Permission::withTrashed()->updateOrCreate(
                 ['slug' => $permissionSlug],
                 [
                     'name' => Str::of($permissionSlug)->replace(['.', '_'], ' ')->title()->toString(),
                     'module' => Str::before($permissionSlug, '.'),
-                    'is_active' => true,
                 ]
             );
         }
@@ -101,22 +103,28 @@ class RbacSeeder extends Seeder
     }
 
     /**
-     * Give every existing account the role matching its legacy `role` column.
+     * Put accounts that have no role yet on the pivot, using their legacy
+     * `role` column.
      *
-     * Without this the pivot stays empty, hasPermission() is false for
-     * everyone, and any route guarded by the permission middleware 403s even
-     * for the super admin.
+     * Accounts that already have a role row are left alone: their roles were
+     * assigned deliberately, and adding the column's role back would undo a
+     * restriction (a user limited to a custom role would regain 'admin').
      */
     protected function attachRolesToExistingUsers(): void
     {
         $rolesBySlug = Role::pluck('id', 'slug');
 
-        User::query()->whereNotNull('role')->each(function (User $user) use ($rolesBySlug) {
-            $roleId = $rolesBySlug[$user->role] ?? null;
+        User::query()
+            ->whereNotNull('role')
+            ->whereNotExists(fn ($pivot) => $pivot->select(DB::raw(1))
+                ->from('role_user')
+                ->whereColumn('role_user.user_id', 'users.id'))
+            ->each(function (User $user) use ($rolesBySlug) {
+                $roleId = $rolesBySlug[$user->role] ?? null;
 
-            if ($roleId) {
-                $user->roles()->syncWithoutDetaching([$roleId]);
-            }
-        });
+                if ($roleId) {
+                    $user->roles()->syncWithoutDetaching([$roleId]);
+                }
+            });
     }
 }

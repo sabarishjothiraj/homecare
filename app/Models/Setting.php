@@ -27,6 +27,7 @@ class Setting extends Model
     {
         return Cache::remember("setting_{$key}", 3600, function () use ($key, $default) {
             $setting = self::where('key', $key)->first();
+
             return $setting ? $setting->value : $default;
         });
     }
@@ -43,7 +44,7 @@ class Setting extends Model
         // yet needs one generated. updateOrCreate could not be used here: its
         // values apply on update too, which would overwrite curated labels on
         // every save.
-        if (!$setting->exists && blank($setting->label)) {
+        if (! $setting->exists && blank($setting->label)) {
             $setting->label = Str::headline($key);
         }
 
@@ -70,4 +71,3 @@ class Setting extends Model
         Cache::flush();
     }
 }
-

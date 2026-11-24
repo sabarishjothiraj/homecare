@@ -70,7 +70,7 @@
                                        class="form-control @error('display_order') is-invalid @enderror" 
                                        id="display_order" 
                                        name="display_order" 
-                                       value="{{ old('display_order', $service->order ?? $service->display_order) }}"
+                                       value="{{ old('display_order', $service->order) }}"
                                        min="0">
                                 @error('display_order')
                                     <div class="invalid-feedback">{{ $message }}</div>
@@ -83,7 +83,7 @@
                                     <input class="form-check-input" 
                                            type="checkbox" 
                                            id="is_active" 
-                                           name="is_active"
+                                           name="is_active" value="1"
                                            {{ old('is_active', $service->is_active) ? 'checked' : '' }}>
                                     <label class="form-check-label" for="is_active">
                                         <strong>Active Service</strong>
@@ -126,7 +126,6 @@
                 </div>
                 <div class="card-body">
                     <p class="small mb-2"><strong>Service ID:</strong> #{{ $service->id }}</p>
-                    <p class="small mb-2"><strong>Slug:</strong> {{ $service->slug ?? 'N/A' }}</p>
                     <p class="small mb-2"><strong>Status:</strong> 
                         @if($service->is_active)
                             <span class="badge bg-success">Active</span>

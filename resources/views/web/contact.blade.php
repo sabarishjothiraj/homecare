@@ -71,9 +71,22 @@
                             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                         </div>
                         @endif
-                        
+
+                        @if(session('error'))
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <i class="fas fa-exclamation-circle me-2"></i>{{ session('error') }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                        @endif
+
                         <form action="{{ route('contact.store') }}" method="POST">
                             @csrf
+
+                            {{-- Honeypot: hidden from people, filled in by form-spamming bots. --}}
+                            <div style="position: absolute; left: -10000px;" aria-hidden="true">
+                                <label for="hp_extra">Leave this field empty</label>
+                                <input type="text" id="hp_extra" name="hp_extra" value="" tabindex="-1" autocomplete="off">
+                            </div>
                             
                             <div class="row">
                                 <div class="col-md-6 mb-3">

@@ -140,12 +140,16 @@ php artisan serve
 Visit `http://localhost:8000` for the public website
 Visit `http://localhost:8000/admin` for the admin panel
 
-## Default Admin Credentials
+## Admin Credentials
 
-- **Email**: admin@homenursing.com
-- **Password**: password
+`php artisan db:seed` creates the super admin `admin@homenursing.com`. Its
+password is `SEED_ADMIN_PASSWORD` from `.env`, or, if that is blank, a random
+password printed once in the seeder output. The seeder never runs in
+production and never changes an existing account.
 
-**Important**: Change these credentials immediately after first login!
+Staff (non-super-admin) logins also need a one-time code sent to the owner's
+approver address, set under **Admin → Settings → Login OTP**. See
+[OPERATIONS.md](OPERATIONS.md).
 
 ## Database Structure
 

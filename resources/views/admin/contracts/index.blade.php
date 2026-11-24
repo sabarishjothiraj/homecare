@@ -103,7 +103,7 @@
                                         <div>
                                             <strong>{{ $contract->patient->name ?? 'N/A' }}</strong>
                                             <br>
-                                            <small class="text-muted">{{ $contract->patient->community ?? '' }}</small>
+                                            <small class="text-muted">{{ $contract->patient->short_address ?? '' }}</small>
                                         </div>
                                     </div>
                                 </td>

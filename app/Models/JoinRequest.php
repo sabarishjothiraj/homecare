@@ -9,6 +9,17 @@ class JoinRequest extends Model
 {
     use HasFactory;
 
+    /**
+     * status => [label, bootstrap colour], matching the join_requests.status enum.
+     */
+    public const STATUSES = [
+        'new' => ['label' => 'New', 'tone' => 'primary'],
+        'reviewing' => ['label' => 'Reviewing', 'tone' => 'info'],
+        'approved' => ['label' => 'Approved', 'tone' => 'success'],
+        'rejected' => ['label' => 'Rejected', 'tone' => 'danger'],
+        'converted' => ['label' => 'Converted', 'tone' => 'dark'],
+    ];
+
     protected $fillable = [
         'field_data',
         'status',
@@ -64,6 +75,36 @@ class JoinRequest extends Model
     }
 
     /**
+     * Once an employee exists for this request it must not be reviewed or
+     * converted again.
+     */
+    public function isConverted(): bool
+    {
+        return $this->status === 'converted' || $this->employee_id !== null;
+    }
+
+    public function statusLabel(): string
+    {
+        return self::STATUSES[$this->status]['label'] ?? ucfirst((string) $this->status);
+    }
+
+    public function statusTone(): string
+    {
+        return self::STATUSES[$this->status]['tone'] ?? 'secondary';
+    }
+
+    /**
+     * Applicant name from either a single "name" field or the default
+     * first_name / last_name fields.
+     */
+    public function applicantName(): ?string
+    {
+        $name = trim(($this->getField('first_name') ?? '').' '.($this->getField('last_name') ?? ''));
+
+        return $this->getField('name') ?: ($name !== '' ? $name : null);
+    }
+
+    /**
      * Get field value
      */
     public function getField(string $key, $default = null)
@@ -71,4 +112,3 @@ class JoinRequest extends Model
         return $this->field_data[$key] ?? $default;
     }
 }
-

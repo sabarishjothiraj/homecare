@@ -14,9 +14,7 @@ class SmsOtpNotifier implements OtpNotifier
 {
     public const CONFIG_KEY = 'otp_phone_number';
 
-    public function __construct(private readonly SmsSender $sms)
-    {
-    }
+    public function __construct(private readonly SmsSender $sms) {}
 
     public function destination(): ?string
     {

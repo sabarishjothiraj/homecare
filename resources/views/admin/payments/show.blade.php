@@ -54,8 +54,18 @@
                                 @else
                                     <span class="badge bg-secondary">{{ ucfirst($payment->status) }}</span>
                                 @endif
+                                @if($payment->needsRefund())
+                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger-subtle">Refund required</span>
+                                @endif
                             </p>
                         </div>
+                        @if($payment->needsRefund())
+                            <div class="col-12">
+                                <div class="alert alert-danger mb-0">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>Razorpay captured money for this order that was not credited to the contract. Refund it from the Razorpay dashboard; the details are in the notes below.
+                                </div>
+                            </div>
+                        @endif
                         <div class="col-md-6">
                             <label class="text-muted small">Payment Method</label>
                             <p class="mb-0">{{ ucfirst(str_replace('_', ' ', $payment->method)) }}</p>
@@ -90,10 +100,16 @@
                             <label class="text-muted small">Last Updated</label>
                             <p class="mb-0">{{ $payment->updated_at->diffForHumans() }}</p>
                         </div>
+                        @if($payment->reference)
+                            <div class="col-md-6">
+                                <label class="text-muted small">Reference</label>
+                                <p class="mb-0">{{ $payment->reference }}</p>
+                            </div>
+                        @endif
                         @if($payment->notes)
                             <div class="col-12">
                                 <label class="text-muted small">Notes</label>
-                                <p class="mb-0">{{ $payment->notes }}</p>
+                                <p class="mb-0">{!! nl2br(e($payment->notes)) !!}</p>
                             </div>
                         @endif
                     </div>
@@ -112,6 +128,9 @@
                             <label class="text-muted small">Contract Number</label>
                             <p class="mb-0">
                                 <strong class="text-primary">{{ $payment->contract->contract_number }}</strong>
+                                @if($payment->contract->trashed())
+                                    <span class="badge bg-secondary ms-1">Deleted</span>
+                                @endif
                             </p>
                         </div>
                         <div class="col-md-6">
@@ -136,44 +155,83 @@
                             <label class="text-muted small">Contract Amount</label>
                             <p class="mb-0"><strong class="text-success">₹{{ number_format($payment->contract->amount, 0) }}</strong></p>
                         </div>
-                        <div class="col-12">
-                            <a href="{{ route('admin.contracts.show', $payment->contract) }}" class="btn btn-sm btn-outline-primary">
-                                <i class="fas fa-eye me-1"></i>View Full Contract
-                            </a>
-                        </div>
+                        @if($payment->contract->refund_amount !== null || $payment->contract->refund_details)
+                            <div class="col-12">
+                                <div class="border border-danger-subtle bg-danger bg-opacity-10 rounded p-3">
+                                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                                        <div>
+                                            <div class="text-danger fw-semibold mb-1"><i class="fas fa-undo-alt me-1"></i>Refund</div>
+                                            @if($payment->contract->refund_amount !== null)
+                                                <div class="fs-5 fw-semibold text-danger">₹{{ number_format($payment->contract->refund_amount, 2) }}</div>
+                                            @endif
+                                            @if($payment->contract->refund_details)
+                                                <div class="small">{{ $payment->contract->refund_details }}</div>
+                                            @endif
+                                        </div>
+                                        <div class="text-end small text-muted">
+                                            @if($payment->contract->closed_at)
+                                                Refunded on {{ $payment->contract->closed_at->format('M d, Y') }}<br>
+                                            @endif
+                                            @if($payment->contract->closure_reason)
+                                                Reason: {{ $payment->contract->closure_reason }}
+                                            @endif
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        @endif
+                        @unless($payment->contract->trashed())
+                            <div class="col-12">
+                                <a href="{{ route('admin.contracts.show', $payment->contract) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-eye me-1"></i>View Full Contract
+                                </a>
+                            </div>
+                        @endunless
                     </div>
                 </div>
             </div>
 
             <!-- Patient Information -->
+            @php $patient = $payment->contract->patient; @endphp
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-white">
                     <h5 class="mb-0"><i class="fas fa-user me-2"></i>Patient Information</h5>
                 </div>
                 <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="text-muted small">Name</label>
-                            <p class="mb-0"><strong>{{ $payment->contract->patient->name }}</strong></p>
+                    @if($patient)
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="text-muted small">Name</label>
+                                <p class="mb-0">
+                                    <strong>{{ $patient->name }}</strong>
+                                    @if($patient->trashed())
+                                        <span class="badge bg-secondary ms-1">Deleted</span>
+                                    @endif
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">Phone</label>
+                                <p class="mb-0">{{ $patient->phone ?: 'N/A' }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">Email</label>
+                                <p class="mb-0">{{ $patient->email ?? 'N/A' }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">Address</label>
+                                <p class="mb-0">{{ $patient->full_address ?: 'N/A' }}</p>
+                            </div>
+                            @unless($patient->trashed())
+                                <div class="col-12">
+                                    <a href="{{ route('admin.patients.show', $patient) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-eye me-1"></i>View Patient Details
+                                    </a>
+                                </div>
+                            @endunless
                         </div>
-                        <div class="col-md-6">
-                            <label class="text-muted small">Phone</label>
-                            <p class="mb-0">{{ $payment->contract->patient->phone }}</p>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="text-muted small">Email</label>
-                            <p class="mb-0">{{ $payment->contract->patient->email ?? 'N/A' }}</p>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="text-muted small">Community</label>
-                            <p class="mb-0">{{ $payment->contract->patient->community ?? 'N/A' }}</p>
-                        </div>
-                        <div class="col-12">
-                            <a href="{{ route('admin.patients.show', $payment->contract->patient) }}" class="btn btn-sm btn-outline-primary">
-                                <i class="fas fa-eye me-1"></i>View Patient Details
-                            </a>
-                        </div>
-                    </div>
+                    @else
+                        <p class="text-muted mb-0">Patient record not available.</p>
+                    @endif
                 </div>
             </div>
             @endif
@@ -210,11 +268,13 @@
                                 @endif
                             </p>
                         </div>
-                        <div class="col-12">
-                            <a href="{{ route('admin.employees.show', $payment->employee) }}" class="btn btn-sm btn-outline-primary">
-                                <i class="fas fa-eye me-1"></i>View Employee Details
-                            </a>
-                        </div>
+                        @unless($payment->employee->trashed())
+                            <div class="col-12">
+                                <a href="{{ route('admin.employees.show', $payment->employee) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-eye me-1"></i>View Employee Details
+                                </a>
+                            </div>
+                        @endunless
                     </div>
                 </div>
             </div>

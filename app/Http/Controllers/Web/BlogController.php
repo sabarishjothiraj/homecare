@@ -51,4 +51,3 @@ class BlogController extends Controller
         return view('web.blogs.show', compact('blog', 'relatedBlogs'));
     }
 }
-

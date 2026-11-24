@@ -167,17 +167,22 @@ php artisan serve
 
 The application will be available at: `http://localhost:8000`
 
-## Default Login Credentials
+## Login Credentials
 
-### Super Admin
-- **Email**: admin@homenursing.com
-- **Password**: password
+The seeder creates two accounts:
 
-### Regular Admin
-- **Email**: user@homenursing.com
-- **Password**: password
+- **Super Admin**: admin@homenursing.com
+- **Regular Admin**: user@homenursing.com
 
-**⚠️ IMPORTANT**: Change these passwords immediately after first login!
+Their password is `SEED_ADMIN_PASSWORD` from `.env` (at least 8 characters).
+If that is blank, a random password is generated and printed once in the
+`db:seed` output, so copy it then. The seeder refuses to run in production and
+never overwrites an existing account, so re-running it is safe.
+
+The regular admin (and any other non-super-admin) also needs a one-time code
+emailed to the owner's approver address before the login completes. Set that
+address under **Admin → Settings → Login OTP**, and configure real SMTP
+(`MAIL_MAILER=log` delivers nothing). See OPERATIONS.md.
 
 ## Accessing the Application
 

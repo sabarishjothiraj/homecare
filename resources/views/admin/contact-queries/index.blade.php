@@ -43,13 +43,30 @@
                 <div class="card-body">
                     <div class="d-flex align-items-center">
                         <div class="flex-shrink-0">
+                            <div class="bg-info bg-opacity-10 rounded p-3">
+                                <i class="fas fa-hourglass-half fa-2x text-info"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="text-muted mb-1">In Progress</h6>
+                            <h3 class="mb-0">{{ $inProgressCount }}</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
                             <div class="bg-success bg-opacity-10 rounded p-3">
                                 <i class="fas fa-check-circle fa-2x text-success"></i>
                             </div>
                         </div>
                         <div class="flex-grow-1 ms-3">
-                            <h6 class="text-muted mb-1">Responded</h6>
-                            <h3 class="mb-0">{{ $respondedCount }}</h3>
+                            <h6 class="text-muted mb-1">Resolved</h6>
+                            <h3 class="mb-0">{{ $resolvedCount }}</h3>
                         </div>
                     </div>
                 </div>
@@ -65,9 +82,9 @@
                     <label class="form-label">Status</label>
                     <select name="status" class="form-select">
                         <option value="">All Status</option>
-                        <option value="new" {{ request('status') === 'new' ? 'selected' : '' }}>New</option>
-                        <option value="read" {{ request('status') === 'read' ? 'selected' : '' }}>Read</option>
-                        <option value="responded" {{ request('status') === 'responded' ? 'selected' : '' }}>Responded</option>
+                        @foreach(\App\Models\ContactQuery::STATUSES as $value => $status)
+                            <option value="{{ $value }}" {{ request('status') === $value ? 'selected' : '' }}>{{ $status['label'] }}</option>
+                        @endforeach
                     </select>
                 </div>
                 <div class="col-md-2 d-flex align-items-end">
@@ -111,13 +128,7 @@
                                 <td>{{ $query->phone ?? '-' }}</td>
                                 <td>{{ Str::limit($query->subject ?? 'No Subject', 40) }}</td>
                                 <td>
-                                    @if($query->status === 'new')
-                                        <span class="badge bg-primary">New</span>
-                                    @elseif($query->status === 'read')
-                                        <span class="badge bg-info">Read</span>
-                                    @else
-                                        <span class="badge bg-success">Responded</span>
-                                    @endif
+                                    <span class="badge bg-{{ $query->statusTone() }}">{{ $query->statusLabel() }}</span>
                                 </td>
                                 <td>{{ $query->created_at->format('M d, Y') }}</td>
                                 <td>

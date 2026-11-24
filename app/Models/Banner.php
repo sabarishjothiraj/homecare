@@ -58,4 +58,3 @@ class Banner extends Model
         return (string) media_url($this->image);
     }
 }
-

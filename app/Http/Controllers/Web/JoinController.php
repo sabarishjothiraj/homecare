@@ -3,10 +3,11 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
-use App\Models\JoinRequest;
 use App\Models\EmployeeField;
+use App\Models\JoinRequest;
 use App\Models\Setting;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class JoinController extends Controller
 {
@@ -36,24 +37,19 @@ class JoinController extends Controller
      */
     public function store(Request $request)
     {
-        // Get all active fields
-        $fields = EmployeeField::active()->get();
+        // Validate exactly the fields index() renders. Document fields are not
+        // on the public form, so requiring them here rejected every submission.
+        $fields = EmployeeField::active()->nonDocuments()->get();
 
         // Build validation rules dynamically
         $rules = [];
         foreach ($fields as $field) {
-            $fieldRules = [];
-            
-            if ($field->is_required) {
-                $fieldRules[] = 'required';
-            } else {
-                $fieldRules[] = 'nullable';
-            }
+            $fieldRules = [$field->is_required ? 'required' : 'nullable'];
 
             // Add type-specific validation
             switch ($field->type) {
                 case 'email':
-                    $fieldRules[] = 'email';
+                    array_push($fieldRules, 'email', 'max:255');
                     break;
                 case 'number':
                     $fieldRules[] = 'numeric';
@@ -62,13 +58,20 @@ class JoinController extends Controller
                     $fieldRules[] = 'date';
                     break;
                 case 'phone':
-                    $fieldRules[] = 'string|max:20';
+                    array_push($fieldRules, 'string', 'max:20');
                     break;
                 default:
-                    $fieldRules[] = 'string|max:1000';
+                    array_push($fieldRules, 'string', 'max:1000');
             }
 
-            $rules[$field->name] = implode('|', $fieldRules);
+            // A select only accepts one of its options (the view renders a
+            // plain text box when there are none).
+            $options = $field->type === 'select' ? $field->optionList() : [];
+            if ($options !== []) {
+                $fieldRules[] = Rule::in($options);
+            }
+
+            $rules[$field->name] = $fieldRules;
         }
 
         $validated = $request->validate($rules);
@@ -83,4 +86,3 @@ class JoinController extends Controller
             ->with('success', 'Thank you for your interest! We will review your application and get back to you soon.');
     }
 }
-

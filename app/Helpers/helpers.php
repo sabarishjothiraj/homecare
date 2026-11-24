@@ -2,7 +2,7 @@
 
 use App\Models\Setting;
 
-if (!function_exists('setting')) {
+if (! function_exists('setting')) {
     /**
      * Get setting value
      */
@@ -16,7 +16,7 @@ if (!function_exists('setting')) {
     }
 }
 
-if (!function_exists('media_url')) {
+if (! function_exists('media_url')) {
     /**
      * Resolve a stored media path to a usable URL.
      *
@@ -37,21 +37,23 @@ if (!function_exists('media_url')) {
             return $path;
         }
 
-        return asset('storage/' . ltrim($path, '/'));
+        return asset('storage/'.ltrim($path, '/'));
     }
 }
 
-if (!function_exists('format_currency')) {
+if (! function_exists('format_currency')) {
     /**
      * Format currency
      */
     function format_currency($amount): string
     {
-        return '$' . number_format($amount, 2);
+        // The business bills in rupees; this helper previously emitted
+        // dollars while every template alongside it used the rupee sign.
+        return "\u{20B9}".number_format((float) $amount, 2);
     }
 }
 
-if (!function_exists('contract_status_badge')) {
+if (! function_exists('contract_status_badge')) {
     /**
      * Get contract status badge HTML
      */
@@ -65,11 +67,11 @@ if (!function_exists('contract_status_badge')) {
             'closed' => '<span class="badge bg-secondary">Closed</span>',
         ];
 
-        return $badges[$status] ?? '<span class="badge bg-secondary">' . ucfirst($status) . '</span>';
+        return $badges[$status] ?? '<span class="badge bg-secondary">'.ucfirst($status).'</span>';
     }
 }
 
-if (!function_exists('contract_status_color')) {
+if (! function_exists('contract_status_color')) {
     /**
      * Get contract status row color class
      */
@@ -87,7 +89,7 @@ if (!function_exists('contract_status_color')) {
     }
 }
 
-if (!function_exists('employee_status_badge')) {
+if (! function_exists('employee_status_badge')) {
     /**
      * Get employee status badge HTML
      */
@@ -100,11 +102,11 @@ if (!function_exists('employee_status_badge')) {
             'suspended' => '<span class="badge bg-dark">Suspended</span>',
         ];
 
-        return $badges[$status] ?? '<span class="badge bg-secondary">' . ucfirst($status) . '</span>';
+        return $badges[$status] ?? '<span class="badge bg-secondary">'.ucfirst($status).'</span>';
     }
 }
 
-if (!function_exists('payment_status_badge')) {
+if (! function_exists('payment_status_badge')) {
     /**
      * Get payment status badge HTML
      */
@@ -117,7 +119,6 @@ if (!function_exists('payment_status_badge')) {
             'refunded' => '<span class="badge bg-info">Refunded</span>',
         ];
 
-        return $badges[$status] ?? '<span class="badge bg-secondary">' . ucfirst($status) . '</span>';
+        return $badges[$status] ?? '<span class="badge bg-secondary">'.ucfirst($status).'</span>';
     }
 }
-

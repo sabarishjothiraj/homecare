@@ -8,15 +8,18 @@ use Symfony\Component\HttpFoundation\Response;
 
 class RoleMiddleware
 {
-    /**
-     * @param  string  ...$roles
-     */
     public function handle(Request $request, Closure $next, string ...$roles): Response
     {
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
+
+        // Tokens of deactivated accounts are already refused at authentication
+        // (AuthServiceProvider); this keeps the guard safe on its own.
+        if (! $user->is_active) {
+            return response()->json(['message' => 'Your account is deactivated.'], 403);
         }
 
         foreach ($roles as $role) {

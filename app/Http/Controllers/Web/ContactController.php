@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ContactQuery;
 use App\Models\Setting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class ContactController extends Controller
 {
@@ -36,6 +37,19 @@ class ContactController extends Controller
      */
     public function store(Request $request)
     {
+        $thanks = 'Thank you for contacting us! We will get back to you soon.';
+
+        // Honeypot field a person never sees. Bots that fill it get the
+        // normal reply, so they have no signal to adapt to, but nothing is
+        // saved. The name is one autofill does not recognise; each drop is
+        // logged (IP only) so a real enquiry lost this way can be spotted.
+        // Flooding is rate-limited on the route (throttle:public-forms).
+        if ($request->filled('hp_extra')) {
+            Log::info('Contact form submission dropped by honeypot.', ['ip' => $request->ip()]);
+
+            return redirect()->back()->with('success', $thanks);
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|max:255',
@@ -46,8 +60,6 @@ class ContactController extends Controller
 
         ContactQuery::create($validated);
 
-        return redirect()->back()
-            ->with('success', 'Thank you for contacting us! We will get back to you soon.');
+        return redirect()->back()->with('success', $thanks);
     }
 }
-

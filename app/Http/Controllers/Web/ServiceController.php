@@ -21,4 +21,3 @@ class ServiceController extends Controller
         return view('web.services', compact('services'));
     }
 }
-

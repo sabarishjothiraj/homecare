@@ -111,8 +111,11 @@
             <a class="nav-link {{ request()->routeIs('admin.contracts*') ? 'active' : '' }}" href="{{ route('admin.contracts.index') }}">
                 <i class="fas fa-file-contract me-2"></i> Contracts
             </a>
+            <a class="nav-link {{ request()->routeIs('admin.attendance*') ? 'active' : '' }}" href="{{ route('admin.attendance.index') }}">
+                <i class="fas fa-calendar-check me-2"></i> Attendance
+            </a>
             <a class="nav-link {{ request()->routeIs('admin.payouts*') ? 'active' : '' }}" href="{{ route('admin.payouts.index') }}">
-                <i class="fas fa-money-bill-wave me-2"></i> Employee Payouts
+                <i class="fas fa-money-bill-wave me-2"></i> Payroll
             </a>
             <a class="nav-link {{ request()->routeIs('admin.payments*') ? 'active' : '' }}" href="{{ route('admin.payments.index') }}">
                 <i class="fas fa-credit-card me-2"></i> Payments

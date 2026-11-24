@@ -22,10 +22,9 @@ return new class extends Migration
      */
     public function down(): void
     {
-        if (DB::getDriverName() !== 'mysql') {
-            return;
-        }
-
-        DB::statement("ALTER TABLE `contracts` MODIFY `payment_method` ENUM('cash','razorpay') NOT NULL DEFAULT 'cash'");
+        // Intentionally a no-op. Narrowing back to ('cash','razorpay') fails under
+        // strict mode once any contract uses online, cheque or bank_transfer, and
+        // remapping those rows would rewrite how the contract was paid. The wider
+        // enum is a superset, so older code still works against it.
     }
 };

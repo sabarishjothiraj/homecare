@@ -8,15 +8,11 @@ use App\Models\User;
 use App\Services\OtpService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-    public function __construct(private readonly OtpService $otpService)
-    {
-    }
+    public function __construct(private readonly OtpService $otpService) {}
 
     /**
      * POST /api/login
@@ -36,7 +32,7 @@ class AuthController extends Controller
             return $this->handleSuperAdminLogin($request, $deviceName);
         }
 
-        if (!$request->filled('email')) {
+        if (! $request->filled('email')) {
             throw ValidationException::withMessages([
                 'email' => ['Email is required for non-super-admin login.'],
             ]);
@@ -77,28 +73,30 @@ class AuthController extends Controller
 
         $user = $verification->user;
 
-        if (!$user || !$user->is_active) {
+        if (! $user || ! $user->is_active) {
             return response()->json([
                 'success' => false,
                 'message' => 'Your account is deactivated.',
             ], 403);
         }
 
-        if (!$this->otpService->verify($verification, $validated['otp'])) {
-            $exhausted = $verification->fresh()->isConsumed();
+        // verify() redeems the session itself, atomically, so a correct code
+        // submitted twice in parallel still mints only one token.
+        if (! $this->otpService->verify($verification, $validated['otp'])) {
+            // Re-read: a parallel request may have burned or redeemed it.
+            $current = $verification->fresh();
 
             return response()->json([
                 'success' => false,
-                'message' => $exhausted
-                    ? 'Too many incorrect attempts. Please login again to get a new OTP.'
-                    : 'Invalid OTP.',
+                'message' => match (true) {
+                    $current === null => 'OTP session is no longer valid. Please login again.',
+                    $current->isVerified() => 'OTP session already used. Please login again.',
+                    $current->isConsumed() => 'Too many incorrect attempts. Please login again to get a new OTP.',
+                    $current->isExpired() => 'OTP has expired. Please login again.',
+                    default => 'Invalid OTP.',
+                },
             ], 422);
         }
-
-        $verification->update([
-            'verified_at' => now(),
-            'consumed_at' => now(),
-        ]);
 
         $token = $user->createToken($validated['device_name'] ?? 'api-client')->plainTextToken;
 
@@ -127,22 +125,22 @@ class AuthController extends Controller
             'password' => 'required|string|min:6',
         ]);
 
-        $user = User::with('roles')->where('username', $validated['username'])->first();
+        $user = User::findByCredentials('username', $validated['username'], $validated['password']);
 
-        if (!$user || !Hash::check($validated['password'], $user->password)) {
+        if (! $user) {
             throw ValidationException::withMessages([
                 'username' => ['Invalid credentials.'],
             ]);
         }
 
-        if (!$user->is_active) {
+        if (! $user->is_active) {
             return response()->json([
                 'success' => false,
                 'message' => 'Your account is deactivated.',
             ], 403);
         }
 
-        if (!$user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Only super admin can login via username.',
@@ -167,15 +165,15 @@ class AuthController extends Controller
             'password' => 'required|string|min:6',
         ]);
 
-        $user = User::with('roles')->where('email', $validated['email'])->first();
+        $user = User::findByCredentials('email', $validated['email'], $validated['password']);
 
-        if (!$user || !Hash::check($validated['password'], $user->password)) {
+        if (! $user) {
             throw ValidationException::withMessages([
                 'email' => ['Invalid credentials.'],
             ]);
         }
 
-        if (!$user->is_active) {
+        if (! $user->is_active) {
             return response()->json([
                 'success' => false,
                 'message' => 'Your account is deactivated.',
@@ -194,7 +192,7 @@ class AuthController extends Controller
         // refused it - in both cases there is no usable session to hand back.
         $verification = $this->otpService->issueFor($user, $request->ip());
 
-        if (!$verification) {
+        if (! $verification) {
             return response()->json([
                 'success' => false,
                 'message' => $this->otpService->destination() === null

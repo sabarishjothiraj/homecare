@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Contract;
 use App\Models\Payment;
 use App\Services\PaymentService;
 use Illuminate\Http\Request;
@@ -22,7 +23,12 @@ class PaymentController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Payment::with(['contract.patient']);
+        // A payment is a money record and outlives its contract or patient
+        // being deleted, so both are loaded with their trashed rows.
+        $query = Payment::with([
+            'contract' => fn ($q) => $q->withTrashed(),
+            'contract.patient' => fn ($q) => $q->withTrashed(),
+        ]);
 
         // Filter by status
         if ($request->filled('status')) {
@@ -48,13 +54,36 @@ class PaymentController extends Controller
             $query->whereDate('paid_at', '<=', $request->end_date);
         }
 
-        $payments = $query->latest('paid_at')->paginate(20);
+        $payments = $query->latest('paid_at')->paginate(20)->withQueryString();
 
         // Calculate totals
         $totalAmount = Payment::completed()->sum('amount');
         $pendingAmount = Payment::pending()->sum('amount');
+        $refundedAmount = Contract::whereNotNull('refund_amount')->sum('refund_amount');
+        $netAmount = $totalAmount - $refundedAmount;
 
-        return view('admin.payments.index', compact('payments', 'totalAmount', 'pendingAmount'));
+        // Refunds are recorded on the contract when it is closed, dated by closed_at
+        $refundQuery = Contract::with(['patient' => fn ($q) => $q->withTrashed()])
+            ->whereNotNull('refund_amount')
+            ->where('refund_amount', '>', 0);
+
+        if ($request->input('payment_type') === 'employee_activation') {
+            $refundQuery->whereRaw('1 = 0');
+        }
+
+        if ($request->filled('start_date')) {
+            $refundQuery->whereDate('closed_at', '>=', $request->start_date);
+        }
+
+        if ($request->filled('end_date')) {
+            $refundQuery->whereDate('closed_at', '<=', $request->end_date);
+        }
+
+        $refunds = $refundQuery->latest('closed_at')->paginate(20, ['*'], 'refunds_page')->withQueryString();
+
+        $tab = $request->input('tab') === 'refunds' ? 'refunds' : 'payments';
+
+        return view('admin.payments.index', compact('payments', 'totalAmount', 'pendingAmount', 'refundedAmount', 'netAmount', 'refunds', 'tab'));
     }
 
     /**
@@ -62,7 +91,14 @@ class PaymentController extends Controller
      */
     public function show(Payment $payment)
     {
-        $payment->load(['contract.patient', 'contract.service']);
+        // Trashed rows are loaded so a historical payment still shows who
+        // paid; the view drops the links to records that no longer open.
+        $payment->load([
+            'contract' => fn ($q) => $q->withTrashed(),
+            'contract.patient' => fn ($q) => $q->withTrashed(),
+            'contract.service' => fn ($q) => $q->withTrashed(),
+            'employee' => fn ($q) => $q->withTrashed(),
+        ]);
 
         return view('admin.payments.show', compact('payment'));
     }
@@ -91,7 +127,7 @@ class PaymentController extends Controller
             // constant-time so a forged signature cannot be tuned byte by byte.
             $expectedSignature = hash_hmac('sha256', $webhookBody, $webhookSecret);
 
-            if (!hash_equals($expectedSignature, $webhookSignature)) {
+            if (! hash_equals($expectedSignature, $webhookSignature)) {
                 return response()->json(['error' => 'Invalid signature'], 400);
             }
 
@@ -116,7 +152,7 @@ class PaymentController extends Controller
             // Throwable, not Exception: a TypeError or ArgumentCountError in
             // the payment path would otherwise escape as an uncaught fatal and
             // leave Razorpay retrying the hook indefinitely.
-            Log::error('Razorpay webhook error: ' . $e->getMessage(), ['exception' => $e]);
+            Log::error('Razorpay webhook error: '.$e->getMessage(), ['exception' => $e]);
 
             return response()->json(['error' => 'Webhook processing failed'], 500);
         }
@@ -148,7 +184,7 @@ class PaymentController extends Controller
             );
 
         } catch (\Throwable $e) {
-            Log::error('Payment callback error: ' . $e->getMessage(), ['exception' => $e]);
+            Log::error('Payment callback error: '.$e->getMessage(), ['exception' => $e]);
 
             // The raw message can carry gateway internals; keep it in the log.
             return redirect()->route('admin.payments.index')
@@ -156,4 +192,3 @@ class PaymentController extends Controller
         }
     }
 }
-

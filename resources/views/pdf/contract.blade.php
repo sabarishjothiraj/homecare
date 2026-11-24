@@ -113,9 +113,7 @@
         @if($contract->patient->email)
         <div class="info-row"><span class="label">Email:</span> <span class="value">{{ $contract->patient->email }}</span></div>
         @endif
-        <div class="info-row"><span class="label">Address:</span> <span class="value">{{ $contract->patient->address }}</span></div>
-        <div class="info-row"><span class="label">Community:</span> <span class="value">{{ $contract->patient->community }}</span></div>
-        <div class="info-row"><span class="label">Location:</span> <span class="value">{{ $contract->patient->location }}</span></div>
+        <div class="info-row"><span class="label">Address:</span> <span class="value">{{ $contract->patient->full_address }}</span></div>
     </div>
 
     <!-- Service Details -->
@@ -157,13 +155,19 @@
                                 @endif
                             </td>
                             <td>{{ $assignment->service->name ?? $assignment->contractItem->service->name ?? ($contract->service->name ?? 'N/A') }}</td>
-                            <td>₹{{ number_format($assignment->line_amount ?? $assignment->contractItem->amount ?? 0, 2) }}</td>
+                            <td>{{ $assignment->isCover() ? '-' : '₹'.number_format($assignment->line_amount ?? $assignment->contractItem->amount ?? 0, 2) }}</td>
                             <td>
                                 {{ $assignment->start_date->format('M d, Y') }} -
                                 {{ $assignment->end_date ? $assignment->end_date->format('M d, Y') : 'Ongoing' }}
                             </td>
                             <td>
-                                @if($assignment->is_emergency_replacement)
+                                @if($assignment->isCover())
+                                    Temporary cover (leave)
+                                    @if($assignment->coverFor)
+                                        <br>
+                                        <small>For {{ $assignment->coverFor->employee->getField('name', 'N/A') }}</small>
+                                    @endif
+                                @elseif($assignment->is_emergency_replacement)
                                     Temporary replacement
                                     @if($assignment->replacedAssignment)
                                         <br>

@@ -6,6 +6,8 @@
     $paid = $contract->paidAmount();
     $balance = $contract->balanceDue();
     $paymentStatus = $contract->paymentStatus();
+    // Nothing more is collected once a contract is closed (the server refuses it too)
+    $isClosed = $contract->status === 'closed';
 @endphp
 
 @section('content')
@@ -60,7 +62,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @forelse($contract->assignments->where('is_active', true) as $assignment)
+                                @forelse($contract->assignments->where('is_active', true)->whereNull('cover_for_assignment_id') as $assignment)
                                     <tr>
                                         <td>
                                             <strong>{{ $assignment->employee->getField('name', 'N/A') }}</strong><br>
@@ -85,8 +87,13 @@
                                     <td class="text-end text-success">₹{{ number_format($paid, 2) }}</td>
                                 </tr>
                                 <tr>
-                                    <td colspan="2" class="text-end fw-bold {{ $balance > 0 ? 'text-danger' : 'text-success' }}">Balance Due</td>
-                                    <td class="text-end fw-bold {{ $balance > 0 ? 'text-danger' : 'text-success' }}">₹{{ number_format($balance, 2) }}</td>
+                                    @if($isClosed)
+                                        <td colspan="2" class="text-end fw-bold text-muted">Uncollected (contract closed)</td>
+                                        <td class="text-end fw-bold text-muted">₹{{ number_format($balance, 2) }}</td>
+                                    @else
+                                        <td colspan="2" class="text-end fw-bold {{ $balance > 0 ? 'text-danger' : 'text-success' }}">Balance Due</td>
+                                        <td class="text-end fw-bold {{ $balance > 0 ? 'text-danger' : 'text-success' }}">₹{{ number_format($balance, 2) }}</td>
+                                    @endif
                                 </tr>
                             </tfoot>
                         </table>
@@ -159,7 +166,11 @@
                     @endif
                 </div>
                 <div class="card-body">
-                    @if($balance <= 0)
+                    @if($isClosed)
+                        <div class="alert alert-secondary mb-0">
+                            <i class="fas fa-lock me-2"></i>This contract is closed. No further payments can be collected.
+                        </div>
+                    @elseif($balance <= 0)
                         <div class="alert alert-success mb-0">
                             <i class="fas fa-check-circle me-2"></i>This contract is fully paid.
                         </div>
@@ -265,7 +276,7 @@
 </div>
 @endsection
 
-@if($razorpayEnabled && $balance > 0)
+@if($razorpayEnabled && $balance > 0 && ! $isClosed)
 @push('scripts')
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script>

@@ -83,7 +83,7 @@
                                     <input class="form-check-input" 
                                            type="checkbox" 
                                            id="is_active" 
-                                           name="is_active"
+                                           name="is_active" value="1"
                                            {{ old('is_active', true) ? 'checked' : '' }}>
                                     <label class="form-check-label" for="is_active">
                                         <strong>Active Service</strong>
@@ -128,10 +128,6 @@
                     <p class="small text-muted mb-2">
                         <i class="fas fa-check-circle text-success me-2"></i>
                         Required fields are marked with <span class="text-danger">*</span>
-                    </p>
-                    <p class="small text-muted mb-2">
-                        <i class="fas fa-check-circle text-success me-2"></i>
-                        Slug will be auto-generated from service name
                     </p>
                     <p class="small text-muted mb-2">
                         <i class="fas fa-check-circle text-success me-2"></i>

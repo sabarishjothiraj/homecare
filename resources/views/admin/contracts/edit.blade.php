@@ -7,8 +7,10 @@
     // Build line items from existing contract items (and their active assignment),
     // falling back to old() input on validation errors.
     $existingLineItems = $contract->items->map(function ($item) {
-        $assignment = $item->assignments->where('is_active', true)->sortByDesc('id')->first()
-            ?? $item->assignments->sortByDesc('id')->first();
+        // Temporary covers are managed on the contract page, not edited as the line's employee
+        $primaryAssignments = $item->assignments->whereNull('cover_for_assignment_id');
+        $assignment = $primaryAssignments->where('is_active', true)->sortByDesc('id')->first()
+            ?? $primaryAssignments->sortByDesc('id')->first();
 
         return [
             'item_id' => $item->id,
@@ -59,7 +61,7 @@
                                     <option value="">Select Patient</option>
                                     @foreach($patients as $patient)
                                         <option value="{{ $patient->id }}" {{ old('patient_id', $contract->patient_id) == $patient->id ? 'selected' : '' }}>
-                                            {{ $patient->name }} - {{ $patient->community }}
+                                            {{ $patient->name }} - {{ $patient->phone }}{{ $patient->trashed() ? ' (deleted)' : '' }}
                                         </option>
                                     @endforeach
                                 </select>
@@ -102,6 +104,15 @@
                                 @enderror
                             </div>
 
+                            <!-- End Date (custom duration) -->
+                            <div class="col-md-6" id="custom_end_date_container">
+                                <label for="custom_end_date" class="form-label">End Date <span class="text-danger">*</span></label>
+                                <input type="date" class="form-control @error('custom_end_date') is-invalid @enderror" id="custom_end_date" name="custom_end_date" value="{{ old('custom_end_date', $contract->duration_type === 'custom' ? $contract->end_date?->format('Y-m-d') : '') }}">
+                                @error('custom_end_date')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+
                             <!-- Payment Method -->
                             <div class="col-md-6">
                                 <label for="payment_method" class="form-label">Payment Method <span class="text-danger">*</span></label>
@@ -113,6 +124,15 @@
                                     <option value="bank_transfer" {{ old('payment_method', $contract->payment_method) === 'bank_transfer' ? 'selected' : '' }}>Bank Transfer</option>
                                 </select>
                                 @error('payment_method')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+
+                            <!-- Payment Details (cheque / transaction reference) -->
+                            <div class="col-md-6" id="payment-details-wrapper" hidden>
+                                <label for="payment_details" class="form-label"><span id="payment-details-label">Payment Details</span> <span class="text-danger" id="payment-details-required">*</span></label>
+                                <input type="text" class="form-control @error('payment_details') is-invalid @enderror" id="payment_details" name="payment_details" value="{{ old('payment_details', $contract->payment_details) }}" maxlength="500">
+                                @error('payment_details')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>
@@ -135,6 +155,8 @@
                                         <i class="fas fa-plus me-1"></i>Add Service Line
                                     </button>
                                 </div>
+                                {{-- Anchor for AJAX saves: admin-forms.js shows the "line_items" error next to the field of that name --}}
+                                <div><input type="hidden" name="line_items" disabled></div>
                                 @error('line_items')
                                     <div class="text-danger small">{{ $message }}</div>
                                 @enderror
@@ -205,7 +227,8 @@
                 </div>
                 <div class="card-body">
                     <p class="small text-muted mb-2"><i class="fas fa-check-circle text-success me-2"></i>Each service line has its own employee and amount</p>
-                    <p class="small text-muted mb-2"><i class="fas fa-check-circle text-success me-2"></i>Contract total is recalculated as the sum of all service lines</p>
+                    <p class="small text-muted mb-2"><i class="fas fa-check-circle text-success me-2"></i>Contract total is recalculated as the sum of all service lines, and cannot go below what has already been collected</p>
+                    <p class="small text-muted mb-2"><i class="fas fa-check-circle text-success me-2"></i>To change the employee on a staffed service line, use <strong>Replace</strong> on the contract page</p>
                     <p class="small text-muted mb-0"><i class="fas fa-check-circle text-success me-2"></i>The end date and status update automatically on save</p>
                 </div>
             </div>
@@ -223,6 +246,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const durationTypeSelect = document.getElementById('duration_type');
     const durationValueContainer = document.getElementById('duration_value_container');
     const durationValueInput = document.getElementById('duration_value');
+    const customEndContainer = document.getElementById('custom_end_date_container');
+    const customEndInput = document.getElementById('custom_end_date');
     const lineItemsContainer = document.getElementById('line-items-container');
     const addLineItemBtn = document.getElementById('add-line-item-btn');
     const lineTemplate = document.getElementById('line-item-template').innerHTML;
@@ -232,9 +257,14 @@ document.addEventListener('DOMContentLoaded', function() {
             durationValueInput.value = '';
             durationValueInput.removeAttribute('required');
             durationValueContainer.style.display = 'none';
+            customEndInput.setAttribute('required', 'required');
+            customEndContainer.style.display = 'block';
         } else {
             durationValueInput.setAttribute('required', 'required');
             durationValueContainer.style.display = 'block';
+            customEndInput.value = '';
+            customEndInput.removeAttribute('required');
+            customEndContainer.style.display = 'none';
         }
     }
 
@@ -295,5 +325,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateDurationVisibility();
 });
 </script>
+@include('admin.contracts._payment-details-script')
+@include('admin.contracts._line-end-date-script')
 @endpush
 @endsection

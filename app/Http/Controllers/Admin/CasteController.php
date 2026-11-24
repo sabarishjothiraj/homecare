@@ -40,7 +40,7 @@ class CasteController extends Controller
         $validated['is_active'] = $request->has('is_active');
 
         // Auto-set display order if not provided
-        if (!isset($validated['display_order'])) {
+        if (! isset($validated['display_order'])) {
             $validated['display_order'] = Caste::max('display_order') + 1;
         }
 
@@ -50,7 +50,7 @@ class CasteController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Caste created successfully.',
-                'redirect' => route('admin.castes.index')
+                'redirect' => route('admin.castes.index'),
             ]);
         }
 
@@ -72,7 +72,7 @@ class CasteController extends Controller
     public function update(Request $request, Caste $caste)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:100|unique:castes,name,' . $caste->id,
+            'name' => 'required|string|max:100|unique:castes,name,'.$caste->id,
             'is_active' => 'boolean',
             'display_order' => 'nullable|integer|min:0',
         ]);
@@ -85,7 +85,7 @@ class CasteController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Caste updated successfully.',
-                'redirect' => route('admin.castes.index')
+                'redirect' => route('admin.castes.index'),
             ]);
         }
 
@@ -98,19 +98,20 @@ class CasteController extends Controller
      */
     public function destroy(Caste $caste)
     {
-        // Check if caste has patients or employees
-        $patientsCount = $caste->patients()->count();
+        // Only employees carry a caste now (patients.caste_id was dropped).
         $employeesCount = $caste->employees()->count();
 
-        if ($patientsCount > 0 || $employeesCount > 0) {
+        if ($employeesCount > 0) {
+            $message = "Cannot delete caste. It is assigned to {$employeesCount} employee(s).";
+
             if (request()->wantsJson() || request()->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => "Cannot delete caste. It is assigned to {$patientsCount} patient(s) and {$employeesCount} employee(s)."
+                    'message' => $message,
                 ], 422);
             }
-            return redirect()->back()
-                ->with('error', "Cannot delete caste. It is assigned to {$patientsCount} patient(s) and {$employeesCount} employee(s).");
+
+            return redirect()->back()->with('error', $message);
         }
 
         $caste->delete();
@@ -119,7 +120,7 @@ class CasteController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Caste deleted successfully.',
-                'redirect' => route('admin.castes.index')
+                'redirect' => route('admin.castes.index'),
             ]);
         }
 

@@ -152,6 +152,72 @@ class OtpLoginTest extends TestCase
         $this->assertFalse($service->verify($verification->fresh(), $spy->sent->code));
     }
 
+    public function test_a_code_can_be_redeemed_only_once(): void
+    {
+        $spy = $this->captureNotifier();
+        $service = app(OtpService::class);
+        $verification = $service->issueFor($this->worker());
+
+        $this->assertTrue($service->verify($verification, $spy->sent->code));
+        $this->assertTrue($verification->fresh()->isConsumed());
+        $this->assertTrue($verification->fresh()->isVerified());
+
+        $this->assertFalse($service->verify($verification, $spy->sent->code));
+    }
+
+    /**
+     * Parallel requests each load the row before any of them writes. The
+     * checks therefore have to happen in the UPDATE, not on the loaded copy.
+     */
+    public function test_a_stale_copy_cannot_redeem_a_code_another_request_used(): void
+    {
+        $spy = $this->captureNotifier();
+        $service = app(OtpService::class);
+        $verification = $service->issueFor($this->worker());
+
+        $first = $verification->fresh();
+        $second = $verification->fresh();
+
+        $this->assertTrue($service->verify($first, $spy->sent->code));
+        $this->assertFalse($service->verify($second, $spy->sent->code));
+    }
+
+    public function test_a_stale_copy_cannot_guess_past_the_attempt_limit(): void
+    {
+        $spy = $this->captureNotifier();
+        $service = app(OtpService::class);
+        $verification = $service->issueFor($this->worker());
+
+        // Every "request" read attempts = 0 before any of them wrote.
+        $copies = array_map(fn () => $verification->fresh(), range(1, $service->maxAttempts() + 3));
+
+        foreach ($copies as $copy) {
+            $service->verify($copy, '000000');
+        }
+
+        $this->assertSame($service->maxAttempts(), $verification->fresh()->attempts);
+        $this->assertFalse($service->verify($verification, $spy->sent->code));
+    }
+
+    public function test_the_api_mints_one_token_per_code(): void
+    {
+        $spy = $this->captureNotifier();
+        $this->worker();
+
+        $start = $this->withoutMiddleware(ThrottleRequests::class)
+            ->postJson('/api/login', ['email' => 'worker@example.com', 'password' => 'password']);
+
+        $this->postJson('/api/verify-otp', [
+            'otp_token' => $start->json('otp_token'),
+            'otp' => $spy->sent->code,
+        ])->assertOk();
+
+        $this->postJson('/api/verify-otp', [
+            'otp_token' => $start->json('otp_token'),
+            'otp' => $spy->sent->code,
+        ])->assertStatus(422)->assertJsonMissingPath('token');
+    }
+
     /**
      * Issuing a fresh code must invalidate the previous one, or an old code
      * left on the owner's phone would stay usable.
@@ -242,6 +308,57 @@ class OtpLoginTest extends TestCase
                 'password' => 'password',
             ])
             ->assertStatus(403);
+
+        $this->assertDatabaseCount('otp_verifications', 0);
+    }
+
+    /**
+     * The super admin signs in by username and bypasses the approval gate -
+     * they are the person who would otherwise be approving their own login.
+     */
+    public function test_a_super_admin_signs_in_by_username_without_an_otp(): void
+    {
+        $this->captureNotifier();
+        User::factory()->superAdmin()->create([
+            'username' => 'superadmin',
+        ]);
+
+        $this->withoutMiddleware(ThrottleRequests::class)
+            ->postJson('/api/login', [
+                'username' => 'superadmin',
+                'password' => 'password',
+            ])
+            ->assertOk()
+            ->assertJson(['requires_otp' => false])
+            ->assertJsonStructure(['token']);
+
+        $this->assertDatabaseCount('otp_verifications', 0);
+    }
+
+    public function test_a_non_super_admin_cannot_sign_in_through_the_username_route(): void
+    {
+        $this->captureNotifier();
+        User::factory()->create(['username' => 'ordinary', 'role' => 'admin']);
+
+        $this->withoutMiddleware(ThrottleRequests::class)
+            ->postJson('/api/login', [
+                'username' => 'ordinary',
+                'password' => 'password',
+            ])
+            ->assertStatus(403);
+    }
+
+    public function test_a_super_admin_is_refused_the_email_and_otp_route(): void
+    {
+        $this->captureNotifier();
+        User::factory()->superAdmin()->create(['email' => 'boss@example.com']);
+
+        $this->withoutMiddleware(ThrottleRequests::class)
+            ->postJson('/api/login', [
+                'email' => 'boss@example.com',
+                'password' => 'password',
+            ])
+            ->assertStatus(422);
 
         $this->assertDatabaseCount('otp_verifications', 0);
     }

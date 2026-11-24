@@ -18,7 +18,7 @@ class MailOtpNotifier implements OtpNotifier
     {
         $email = trim((string) Config::getValue(self::CONFIG_KEY, ''));
 
-        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        if ($email === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return null;
         }
 
@@ -40,7 +40,7 @@ class MailOtpNotifier implements OtpNotifier
         } catch (\Throwable $e) {
             // A dead SMTP host must surface as "could not send the code",
             // never as a 500 halfway through authenticating.
-            Log::error('[OTP] Email delivery failed: ' . $e->getMessage(), ['exception' => $e]);
+            Log::error('[OTP] Email delivery failed: '.$e->getMessage(), ['exception' => $e]);
 
             return false;
         }

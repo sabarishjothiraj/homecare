@@ -60,9 +60,5 @@ jobs:
           DB_PASSWORD: ""
         run: php artisan test
 
-      # Advisory only for now. The legacy tree has widespread CRLF and
-      # missing-EOF-newline drift; make this blocking after a one-off
-      # `./vendor/bin/pint` formatting commit lands on its own.
       - name: Check code style
-        continue-on-error: true
         run: ./vendor/bin/pint --test

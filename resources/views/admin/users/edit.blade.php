@@ -20,6 +20,9 @@
                 @csrf
                 @method('PUT')
 
+                @php($isSelf = auth()->id() === $user->id)
+                @php($currentRole = $user->isSuperAdmin() ? 'super_admin' : 'admin')
+
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label for="name" class="form-label">Name <span class="text-danger">*</span></label>
@@ -38,16 +41,20 @@
                     </div>
                     <div class="col-md-3">
                         <label for="role" class="form-label">Role <span class="text-danger">*</span></label>
-                        <select name="role" id="role" class="form-select @error('role') is-invalid @enderror" required>
-                            <option value="admin" {{ old('role', $user->role) === 'admin' ? 'selected' : '' }}>Admin</option>
-                            <option value="super_admin" {{ old('role', $user->role) === 'super_admin' ? 'selected' : '' }}>Super Admin</option>
+                        <select name="role" id="role" class="form-select @error('role') is-invalid @enderror" @disabled($isSelf) required>
+                            <option value="admin" {{ old('role', $currentRole) === 'admin' ? 'selected' : '' }}>Admin</option>
+                            @if(auth()->user()->isSuperAdmin())
+                                <option value="super_admin" {{ old('role', $currentRole) === 'super_admin' ? 'selected' : '' }}>Super Admin</option>
+                            @endif
                         </select>
                         @error('role')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        @if($isSelf)<small class="text-muted">You cannot change your own role.</small>@endif
                     </div>
                     <div class="col-md-3 d-flex align-items-end">
                         <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="is_active" name="is_active" {{ old('is_active', $user->is_active) ? 'checked' : '' }}>
+                            <input class="form-check-input @error('is_active') is-invalid @enderror" type="checkbox" id="is_active" name="is_active" value="1" {{ old('is_active', $user->is_active) ? 'checked' : '' }} @disabled($isSelf)>
                             <label class="form-check-label" for="is_active">Active User</label>
+                            @error('is_active')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
                     </div>
                     <div class="col-md-6">

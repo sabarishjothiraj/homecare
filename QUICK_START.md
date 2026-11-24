@@ -12,7 +12,7 @@ Get the Home Nursing application up and running in minutes!
 
 ## What's Working Now
 
-Visit `http://localhost:8000/welcome` to see the application status page.
+Visit `http://localhost:8000` to see the public website.
 
 ---
 
@@ -151,9 +151,8 @@ Visit: **http://localhost:8000/admin**
 
 **Login Credentials:**
 - Email: `admin@homenursing.com`
-- Password: `password`
-
-**⚠️ IMPORTANT**: Change this password immediately after first login!
+- Password: the `SEED_ADMIN_PASSWORD` from `.env`, or the random password
+  printed once when you ran `php artisan db:seed`
 
 ---
 

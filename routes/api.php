@@ -1,12 +1,12 @@
 <?php
 
+use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\ConfigController;
+use App\Http\Controllers\Api\PermissionController;
+use App\Http\Controllers\Api\RoleController;
+use App\Http\Controllers\Api\UserRoleController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\RoleController;
-use App\Http\Controllers\Api\ConfigController;
-use App\Http\Controllers\Api\UserRoleController;
-use App\Http\Controllers\Api\PermissionController;
 
 /*
 |--------------------------------------------------------------------------
@@ -45,4 +45,3 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/configs/otp', [ConfigController::class, 'updateOtpConfig']);
     });
 });
-

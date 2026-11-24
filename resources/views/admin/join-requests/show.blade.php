@@ -77,16 +77,10 @@
                 <div class="card-body">
                     <div class="mb-3">
                         <p class="mb-2"><strong>Current Status:</strong></p>
-                        @if($joinRequest->status === 'new')
-                            <span class="badge bg-primary">New</span>
-                        @elseif($joinRequest->status === 'approved')
-                            <span class="badge bg-success">Approved</span>
-                        @else
-                            <span class="badge bg-danger">Rejected</span>
-                        @endif
+                        <span class="badge bg-{{ $joinRequest->statusTone() }}">{{ $joinRequest->statusLabel() }}</span>
                     </div>
 
-                    @if($joinRequest->status === 'new')
+                    @if(in_array($joinRequest->status, ['new', 'reviewing'], true))
                         <button type="button" class="btn btn-success w-100 mb-2" data-bs-toggle="modal" data-bs-target="#approveModal">
                             <i class="fas fa-check me-2"></i>Approve Request
                         </button>
@@ -95,7 +89,7 @@
                         </button>
                     @endif
 
-                    @if($joinRequest->status === 'approved' && !$joinRequest->converted_to_employee_id)
+                    @if($joinRequest->status === 'approved' && ! $joinRequest->isConverted())
                         <form action="{{ route('admin.join-requests.convert', $joinRequest) }}" method="POST" onsubmit="return confirm('Are you sure you want to convert this request to an employee?');">
                             @csrf
                             <button type="submit" class="btn btn-primary w-100 mb-2">
@@ -104,8 +98,8 @@
                         </form>
                     @endif
 
-                    @if($joinRequest->converted_to_employee_id)
-                        <a href="{{ route('admin.employees.show', $joinRequest->converted_to_employee_id) }}" class="btn btn-outline-primary w-100">
+                    @if($joinRequest->employee_id)
+                        <a href="{{ route('admin.employees.show', $joinRequest->employee_id) }}" class="btn btn-outline-primary w-100">
                             <i class="fas fa-user me-2"></i>View Employee Profile
                         </a>
                     @endif

@@ -9,10 +9,13 @@
             <h2 class="mb-1">User Details</h2>
             <p class="text-muted mb-0">Account details for {{ $user->name }}</p>
         </div>
+        @php($canChange = auth()->user()->isSuperAdmin() || ! $user->isSuperAdmin())
         <div class="d-flex gap-2">
+            @if($canChange)
             <a href="{{ route('admin.users.edit', $user) }}" class="btn btn-warning">
                 <i class="fas fa-edit me-2"></i>Edit
             </a>
+            @endif
             <a href="{{ route('admin.users.index') }}" class="btn btn-outline-secondary">
                 <i class="fas fa-arrow-left me-2"></i>Back to Users
             </a>
@@ -41,8 +44,8 @@
                         </div>
                         <div class="col-md-3">
                             <small class="text-muted d-block">Role</small>
-                            <span class="badge {{ $user->role === 'super_admin' ? 'bg-danger' : 'bg-info' }}">
-                                {{ str_replace('_', ' ', ucfirst($user->role)) }}
+                            <span class="badge {{ $user->isSuperAdmin() ? 'bg-danger' : 'bg-info' }}">
+                                {{ $user->isSuperAdmin() ? 'Super admin' : 'Admin' }}
                             </span>
                         </div>
                         <div class="col-md-3">
@@ -66,6 +69,7 @@
             </div>
         </div>
 
+        @if($canChange)
         <div class="col-md-4">
             <div class="card border-0 shadow-sm mb-3">
                 <div class="card-header bg-white">
@@ -102,6 +106,7 @@
                 </div>
             </div>
         </div>
+        @endif
     </div>
 </div>
 @endsection

@@ -2,223 +2,215 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exceptions\PayrollException;
 use App\Http\Controllers\Controller;
-use App\Models\EmployeePayout;
 use App\Models\Employee;
+use App\Models\EmployeePayout;
+use App\Models\EmployeePayoutItem;
+use App\Services\PayrollService;
 use Illuminate\Http\Request;
-use Carbon\Carbon;
+use Illuminate\Validation\Rule;
 
+/**
+ * Monthly payroll: generate payslips from salary + attendance, adjust, pay.
+ */
 class PayoutController extends Controller
 {
+    public function __construct(private PayrollService $payroll) {}
+
     /**
-     * Display payout listing
+     * Payroll for a month
      */
     public function index(Request $request)
     {
-        $query = EmployeePayout::with('employee');
+        $month = PayrollService::parseMonth($request->input('month')) ?? now()->startOfMonth();
 
-        // Filter by status
+        $query = EmployeePayout::with('employee')
+            ->whereDate('period_start', '>=', $month->copy()->startOfMonth()->toDateString())
+            ->whereDate('period_end', '<=', $month->copy()->endOfMonth()->toDateString());
+
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
-        // Filter by employee
         if ($request->filled('employee_id')) {
             $query->where('employee_id', $request->employee_id);
         }
 
-        // Filter by payment method
-        if ($request->filled('payment_method')) {
-            $query->where('payment_method', $request->payment_method);
-        }
+        $payouts = $query->get()->sortBy(fn ($payout) => strtolower($payout->employee?->getField('name', '') ?? ''))->values();
 
-        // Date range filter
-        if ($request->filled('start_date')) {
-            $query->whereDate('payout_date', '>=', $request->start_date);
-        }
+        $active = $payouts->where('status', '!=', 'cancelled');
+        $totals = [
+            'net' => $active->sum('amount'),
+            'paid' => $payouts->where('status', 'paid')->sum('amount'),
+            'pending' => $payouts->where('status', 'pending')->sum('amount'),
+            'unmarked' => $active->sum(fn ($payout) => (int) ($payout->attendance_summary['unmarked'] ?? 0)),
+        ];
 
-        if ($request->filled('end_date')) {
-            $query->whereDate('payout_date', '<=', $request->end_date);
-        }
+        $employees = Employee::orderBy('first_name')->get();
+        $employeesWithoutSalary = Employee::active()->whereDoesntHave('salaries')->count();
+        $canGenerate = $month->lte(now()->startOfMonth());
 
-        $payouts = $query->latest('payout_date')->paginate(20);
-
-        $employees = Employee::active()->get();
-
-        // Calculate totals
-        $totalPaid = EmployeePayout::paid()->sum('amount');
-        $totalPending = EmployeePayout::pending()->sum('amount');
-
-        return view('admin.payouts.index', compact('payouts', 'employees', 'totalPaid', 'totalPending'));
+        return view('admin.payouts.index', compact('month', 'payouts', 'totals', 'employees', 'employeesWithoutSalary', 'canGenerate'));
     }
 
     /**
-     * Show create form
+     * Create / refresh draft payslips for a month
      */
-    public function create()
-    {
-        $employees = Employee::active()->get();
-
-        return view('admin.payouts.create', compact('employees'));
-    }
-
-    /**
-     * Store new payout
-     */
-    public function store(Request $request)
+    public function generate(Request $request)
     {
         $validated = $request->validate([
-            'employee_id' => 'required|exists:employees,id',
-            'amount' => 'required|numeric|min:0',
-            'payout_date' => 'required|date',
-            'payment_method' => 'required|in:cash,bank_transfer,cheque,online',
-            'description' => 'nullable|string|max:500',
-            'notes' => 'nullable|string',
+            'month' => 'required|date_format:Y-m',
         ]);
 
-        $validated['status'] = 'pending';
+        $month = PayrollService::parseMonth($validated['month']);
 
-        $payout = EmployeePayout::create($validated);
-
-        if ($request->wantsJson() || $request->ajax()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Payout created successfully.',
-                'redirect' => route('admin.payouts.show', $payout)
-            ]);
+        // Drafts for the current month are fine (paying one needs an explicit
+        // override); a month that hasn't started has nothing to pay
+        if ($month->gt(now()->startOfMonth())) {
+            return redirect()->route('admin.payouts.index', ['month' => $month->format('Y-m')])
+                ->with('error', 'Payroll can\'t be generated for '.$month->format('F Y').' until the month starts.');
         }
 
-        return redirect()->route('admin.payouts.show', $payout)
-            ->with('success', 'Payout created successfully.');
+        $result = $this->payroll->generateForMonth($month);
+
+        $parts = [];
+        if ($result['created']) {
+            $parts[] = "{$result['created']} created";
+        }
+        if ($result['updated']) {
+            $parts[] = "{$result['updated']} recalculated";
+        }
+        if ($result['skipped_paid']) {
+            $parts[] = "{$result['skipped_paid']} already paid (unchanged)";
+        }
+
+        $message = 'Payroll for '.$month->format('F Y').': '.($parts ? implode(', ', $parts) : 'nothing to generate').'.';
+
+        $redirect = redirect()->route('admin.payouts.index', ['month' => $month->format('Y-m')])->with('success', $message);
+
+        $warnings = [];
+        if ($result['without_salary']) {
+            $warnings[] = count($result['without_salary']).' active '.str('employee')->plural(count($result['without_salary'])).' skipped with no salary set: '.$this->names($result['without_salary']).'.';
+        }
+        if ($result['zeroed']) {
+            $warnings[] = count($result['zeroed']).' draft '.str('payslip')->plural(count($result['zeroed'])).' recalculated to ₹0 because no salary is set any more: '.$this->names($result['zeroed']).'.';
+        }
+        if ($result['unmarked']) {
+            $warnings[] = "{$result['unmarked']} attendance ".str('day')->plural($result['unmarked']).' are not marked and were not paid. Mark attendance, then recalculate.';
+        }
+
+        return $warnings ? $redirect->with('error', implode(' ', $warnings)) : $redirect;
     }
 
     /**
-     * Show payout details
+     * Payslip
      */
     public function show(EmployeePayout $payout)
     {
-        $payout->load('employee');
+        $payout->load(['employee.salaries', 'employee.services', 'items']);
 
-        return view('admin.payouts.show', compact('payout'));
+        $salaryChanges = $payout->employee
+            ? $payout->employee->salaries->filter(fn ($s) => $s->effective_from->between($payout->period_start->copy()->addDay(), $payout->period_end))
+            : collect();
+
+        $incomplete = $payout->isEditable() ? $this->payroll->incompleteReasons($payout) : [];
+
+        return view('admin.payouts.show', compact('payout', 'salaryChanges', 'incomplete'));
     }
 
-    /**
-     * Show edit form
-     */
-    public function edit(EmployeePayout $payout)
+    public function recalculate(EmployeePayout $payout)
     {
-        if ($payout->status === 'paid') {
-            if (request()->wantsJson() || request()->ajax()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cannot edit a paid payout.'
-                ], 422);
-            }
-            return redirect()->back()
-                ->with('error', 'Cannot edit a paid payout.');
+        try {
+            $this->payroll->recalculate($payout);
+        } catch (PayrollException $e) {
+            return back()->with('error', $e->getMessage());
         }
 
-        $employees = Employee::active()->get();
-
-        return view('admin.payouts.edit', compact('payout', 'employees'));
+        return redirect()->route('admin.payouts.show', $payout)->with('success', 'Payslip recalculated from current salary and attendance.');
     }
 
     /**
-     * Update payout
+     * Add an earning or deduction line
      */
-    public function update(Request $request, EmployeePayout $payout)
+    public function storeItem(Request $request, EmployeePayout $payout)
     {
-        if ($payout->status === 'paid') {
-            if ($request->wantsJson() || $request->ajax()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cannot update a paid payout.'
-                ], 422);
-            }
-            return redirect()->back()
-                ->with('error', 'Cannot update a paid payout.');
+        if (! $payout->isEditable()) {
+            return back()->with('error', 'Paid or cancelled payouts cannot be changed.');
         }
 
         $validated = $request->validate([
-            'employee_id' => 'required|exists:employees,id',
-            'amount' => 'required|numeric|min:0',
-            'payout_date' => 'required|date',
-            'payment_method' => 'required|in:cash,bank_transfer,cheque,online',
-            'description' => 'nullable|string|max:500',
-            'notes' => 'nullable|string',
+            'type' => ['required', Rule::in(['earning', 'deduction'])],
+            'label' => 'required|string|max:255',
+            'amount' => 'required|numeric|min:0.01|max:9999999',
         ]);
 
-        $payout->update($validated);
-
-        if ($request->wantsJson() || $request->ajax()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Payout updated successfully.',
-                'redirect' => route('admin.payouts.show', $payout)
-            ]);
+        try {
+            $this->payroll->addItem($payout, $validated);
+        } catch (PayrollException $e) {
+            return back()->withInput()->with('error', $e->getMessage());
         }
 
-        return redirect()->route('admin.payouts.show', $payout)
-            ->with('success', 'Payout updated successfully.');
+        return redirect()->route('admin.payouts.show', $payout)->with('success', ucfirst($validated['type']).' added.');
     }
 
-    /**
-     * Mark payout as paid
-     */
+    public function destroyItem(EmployeePayout $payout, EmployeePayoutItem $item)
+    {
+        abort_unless($item->employee_payout_id === $payout->id, 404);
+
+        try {
+            $this->payroll->removeItem($payout, $item);
+        } catch (PayrollException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->route('admin.payouts.show', $payout)->with('success', 'Line removed.');
+    }
+
     public function markPaid(Request $request, EmployeePayout $payout)
     {
-        $validated = $request->validate([
-            'transaction_reference' => 'nullable|string|max:255',
-            'paid_notes' => 'nullable|string',
-        ]);
-
-        $payout->update([
-            'status' => 'paid',
-            'paid_at' => Carbon::now(),
-            'transaction_reference' => $validated['transaction_reference'] ?? null,
-            'notes' => $payout->notes . "\n\nPaid Notes: " . ($validated['paid_notes'] ?? ''),
-        ]);
-
-        if ($request->wantsJson() || $request->ajax()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Payout marked as paid successfully.',
-                'redirect' => route('admin.payouts.show', $payout)
-            ]);
+        if (! $payout->isEditable()) {
+            return back()->with('error', 'Only pending payouts can be marked as paid.');
         }
 
-        return redirect()->route('admin.payouts.show', $payout)
-            ->with('success', 'Payout marked as paid successfully.');
+        $validated = $request->validate([
+            'payment_method' => ['required', Rule::in(array_keys(EmployeePayout::PAYMENT_METHODS))],
+            'transaction_reference' => 'nullable|string|max:255',
+            'paid_at' => 'required|date',
+            'paid_notes' => 'nullable|string|max:1000',
+            'expected_amount' => 'nullable|numeric',
+            'allow_incomplete' => 'nullable|boolean',
+        ]);
+
+        try {
+            $this->payroll->markPaid($payout, $validated);
+        } catch (PayrollException $e) {
+            return redirect()->route('admin.payouts.show', $payout)->with('error', $e->getMessage());
+        }
+
+        return redirect()->route('admin.payouts.show', $payout)->with('success', 'Payout marked as paid.');
     }
 
     /**
-     * Delete payout
+     * Delete a draft payslip (it can be generated again)
      */
     public function destroy(EmployeePayout $payout)
     {
-        if ($payout->status === 'paid') {
-            if (request()->wantsJson() || request()->ajax()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cannot delete a paid payout.'
-                ], 422);
-            }
-            return redirect()->back()
-                ->with('error', 'Cannot delete a paid payout.');
+        try {
+            $this->payroll->deleteDraft($payout);
+        } catch (PayrollException $e) {
+            return back()->with('error', $e->getMessage());
         }
 
-        $payout->delete();
+        return redirect()->route('admin.payouts.index', array_filter(['month' => $payout->period_start?->format('Y-m')]))
+            ->with('success', 'Draft payslip deleted.');
+    }
 
-        if (request()->wantsJson() || request()->ajax()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Payout deleted successfully.',
-                'redirect' => route('admin.payouts.index')
-            ]);
-        }
-
-        return redirect()->route('admin.payouts.index')
-            ->with('success', 'Payout deleted successfully.');
+    /**
+     * @param  array<int, string>  $names
+     */
+    private function names(array $names): string
+    {
+        return implode(', ', array_slice($names, 0, 5)).(count($names) > 5 ? '…' : '');
     }
 }
-

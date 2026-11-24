@@ -19,9 +19,7 @@ use Illuminate\Support\Str;
  */
 class OtpService
 {
-    public function __construct(private readonly OtpNotifier $notifier)
-    {
-    }
+    public function __construct(private readonly OtpNotifier $notifier) {}
 
     /**
      * Where the active channel would deliver, or null when nothing is set up.
@@ -82,7 +80,7 @@ class OtpService
             ipAddress: $ipAddress,
         );
 
-        if (!$this->notifier->send($message)) {
+        if (! $this->notifier->send($message)) {
             // Nothing was delivered, so the session is unusable - drop it
             // rather than leaving a code nobody can receive.
             $verification->delete();
@@ -94,32 +92,42 @@ class OtpService
     }
 
     /**
-     * Check a submitted code against one OTP session.
+     * Check a submitted code against one OTP session, and redeem it on success.
      *
-     * Increments the attempt counter on every wrong code and burns the session
-     * once the limit is reached, so a six-digit code cannot be enumerated.
+     * Every submission uses up one attempt, and the session is burned once the
+     * limit is reached, so a six-digit code cannot be enumerated. A true
+     * result means this call consumed the session: the caller may log in.
+     *
+     * Each step is a conditional UPDATE rather than a check on the loaded
+     * model, so parallel requests cannot all read attempts = 0 and get a full
+     * set of guesses each, or both redeem the same correct code.
      */
     public function verify(OtpVerification $verification, string $otp): bool
     {
-        if ($verification->isConsumed() || $verification->isExpired()) {
+        $session = fn () => OtpVerification::query()->whereKey($verification->getKey());
+
+        $claimed = $session()
+            ->whereNull('consumed_at')
+            ->where('attempts', '<', $this->maxAttempts())
+            ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>=', now()))
+            ->increment('attempts');
+
+        if ($claimed !== 1) {
             return false;
         }
 
-        if ($verification->attempts >= $this->maxAttempts()) {
-            return false;
-        }
-
-        if (!$verification->otp_code || !Hash::check(trim($otp), $verification->otp_code)) {
-            $verification->increment('attempts');
-
-            if ($verification->fresh()->attempts >= $this->maxAttempts()) {
-                $verification->update(['consumed_at' => now()]);
-            }
+        if (! $verification->otp_code || ! Hash::check(trim($otp), $verification->otp_code)) {
+            $session()
+                ->whereNull('consumed_at')
+                ->where('attempts', '>=', $this->maxAttempts())
+                ->update(['consumed_at' => now()]);
 
             return false;
         }
 
-        return true;
+        return $session()
+            ->whereNull('consumed_at')
+            ->update(['verified_at' => now(), 'consumed_at' => now()]) === 1;
     }
 
     /**

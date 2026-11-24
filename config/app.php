@@ -45,7 +45,9 @@ return [
     |--------------------------------------------------------------------------
     */
 
-    'timezone' => 'UTC',
+    // The business runs on IST. Stored timestamps were converted from UTC by
+    // the 2026_09_23_000100 migration; see OPERATIONS.md before changing this.
+    'timezone' => env('APP_TIMEZONE', 'Asia/Kolkata'),
 
     /*
     |--------------------------------------------------------------------------
@@ -111,4 +113,3 @@ return [
     ])->toArray(),
 
 ];
-

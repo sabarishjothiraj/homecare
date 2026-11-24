@@ -19,4 +19,3 @@ class VerifyCsrfToken extends Middleware
         'api/razorpay/callback',
     ];
 }
-

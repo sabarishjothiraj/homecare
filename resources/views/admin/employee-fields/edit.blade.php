@@ -18,7 +18,7 @@
     @if($employeeField->is_mandatory)
         <div class="alert alert-warning">
             <i class="fas fa-exclamation-triangle me-2"></i>
-            <strong>Warning:</strong> This is a mandatory system field. You can only activate/deactivate it, but cannot modify its configuration.
+            <strong>Warning:</strong> This is a mandatory system field. You can only activate/deactivate it or change its display order, but cannot modify its configuration.
         </div>
     @endif
 
@@ -96,7 +96,7 @@
                                        class="form-control @error('display_order') is-invalid @enderror" 
                                        id="display_order" 
                                        name="display_order" 
-                                       value="{{ old('display_order', $employeeField->display_order) }}"
+                                       value="{{ old('display_order', $employeeField->order) }}"
                                        min="0">
                                 @error('display_order')
                                     <div class="invalid-feedback">{{ $message }}</div>
@@ -111,7 +111,7 @@
                                           name="options" 
                                           rows="3"
                                           {{ $employeeField->is_mandatory ? 'readonly' : '' }}
-                                          placeholder="Enter options separated by commas">{{ old('options', $employeeField->options) }}</textarea>
+                                          placeholder="Enter options separated by commas">{{ old('options', $employeeField->type === 'select' ? implode(', ', $employeeField->optionList()) : '') }}</textarea>
                                 @error('options')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
@@ -123,7 +123,7 @@
                                     <input class="form-check-input" 
                                            type="checkbox" 
                                            id="is_required" 
-                                           name="is_required" 
+                                           name="is_required" value="1" 
                                            {{ old('is_required', $employeeField->is_required) ? 'checked' : '' }}
                                            {{ $employeeField->is_mandatory ? 'disabled' : '' }}>
                                     <label class="form-check-label" for="is_required">
@@ -135,7 +135,7 @@
                                     <input class="form-check-input" 
                                            type="checkbox" 
                                            id="is_document" 
-                                           name="is_document" 
+                                           name="is_document" value="1" 
                                            {{ old('is_document', $employeeField->is_document) ? 'checked' : '' }}
                                            {{ $employeeField->is_mandatory ? 'disabled' : '' }}>
                                     <label class="form-check-label" for="is_document">
@@ -147,7 +147,7 @@
                                     <input class="form-check-input" 
                                            type="checkbox" 
                                            id="is_active" 
-                                           name="is_active" 
+                                           name="is_active" value="1" 
                                            {{ old('is_active', $employeeField->is_active) ? 'checked' : '' }}>
                                     <label class="form-check-label" for="is_active">
                                         <strong>Active</strong>

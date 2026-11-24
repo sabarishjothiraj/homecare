@@ -21,7 +21,7 @@ class PermissionController extends Controller
             'slug' => 'required|string|max:255|alpha_dash|unique:permissions,slug',
             'module' => 'nullable|string|max:255',
             'description' => 'nullable|string',
-            'is_active' => 'nullable|boolean',
+            'is_active' => 'sometimes|boolean',
         ]);
 
         $permission = Permission::create($validated);
@@ -42,10 +42,10 @@ class PermissionController extends Controller
     {
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
-            'slug' => 'sometimes|required|string|max:255|alpha_dash|unique:permissions,slug,' . $permission->id,
+            'slug' => 'sometimes|required|string|max:255|alpha_dash|unique:permissions,slug,'.$permission->id,
             'module' => 'nullable|string|max:255',
             'description' => 'nullable|string',
-            'is_active' => 'nullable|boolean',
+            'is_active' => 'sometimes|boolean',
         ]);
 
         $permission->update($validated);

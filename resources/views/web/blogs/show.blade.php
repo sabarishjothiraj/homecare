@@ -1,7 +1,8 @@
 @extends('layouts.public')
 
 @section('title', $blog->title)
-@section('meta_description', $blog->excerpt)
+{{-- A null value would open a block @section that is never closed. --}}
+@section('meta_description', $blog->excerpt ?: Str::limit(html_entity_decode(strip_tags($blog->content), ENT_QUOTES), 160))
 
 @section('styles')
 <style>

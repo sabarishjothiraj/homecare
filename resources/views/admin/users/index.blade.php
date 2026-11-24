@@ -78,13 +78,14 @@
                         </thead>
                         <tbody>
                             @foreach($users as $user)
+                            @php($canChange = auth()->user()->isSuperAdmin() || ! $user->isSuperAdmin())
                             <tr>
                                 <td><strong>{{ $user->name }}</strong></td>
                                 <td>{{ $user->username ?: 'N/A' }}</td>
                                 <td>{{ $user->email }}</td>
                                 <td>
-                                    <span class="badge {{ $user->role === 'super_admin' ? 'bg-danger' : 'bg-info' }}">
-                                        {{ str_replace('_', ' ', ucfirst($user->role)) }}
+                                    <span class="badge {{ $user->isSuperAdmin() ? 'bg-danger' : 'bg-info' }}">
+                                        {{ $user->isSuperAdmin() ? 'Super admin' : 'Admin' }}
                                     </span>
                                 </td>
                                 <td>
@@ -100,6 +101,7 @@
                                         <a href="{{ route('admin.users.show', $user) }}" class="btn btn-outline-primary" title="View">
                                             <i class="fas fa-eye"></i>
                                         </a>
+                                        @if($canChange)
                                         <a href="{{ route('admin.users.edit', $user) }}" class="btn btn-outline-warning" title="Edit">
                                             <i class="fas fa-edit"></i>
                                         </a>
@@ -128,6 +130,7 @@
                                                     <i class="fas fa-trash"></i>
                                                 </button>
                                             </form>
+                                        @endif
                                         @endif
                                     </div>
                                 </td>

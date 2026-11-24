@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\ContactQuery;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class ContactQueryController extends Controller
 {
@@ -24,9 +25,10 @@ class ContactQueryController extends Controller
 
         // Count by status
         $newCount = ContactQuery::new()->count();
-        $respondedCount = ContactQuery::responded()->count();
+        $inProgressCount = ContactQuery::inProgress()->count();
+        $resolvedCount = ContactQuery::resolved()->count();
 
-        return view('admin.contact-queries.index', compact('queries', 'newCount', 'respondedCount'));
+        return view('admin.contact-queries.index', compact('queries', 'newCount', 'inProgressCount', 'resolvedCount'));
     }
 
     /**
@@ -34,9 +36,10 @@ class ContactQueryController extends Controller
      */
     public function show(ContactQuery $contactQuery)
     {
-        // Mark as read if new
+        // Opening a new query moves it to "in progress" (the enum has no
+        // "read" value, and strict mode rejects anything outside it).
         if ($contactQuery->status === 'new') {
-            $contactQuery->update(['status' => 'read']);
+            $contactQuery->update(['status' => 'in_progress']);
         }
 
         return view('admin.contact-queries.show', compact('contactQuery'));
@@ -48,7 +51,7 @@ class ContactQueryController extends Controller
     public function update(Request $request, ContactQuery $contactQuery)
     {
         $validated = $request->validate([
-            'status' => 'required|in:new,read,responded',
+            'status' => ['required', Rule::in(array_keys(ContactQuery::STATUSES))],
         ]);
 
         $contactQuery->update($validated);
@@ -57,7 +60,7 @@ class ContactQueryController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Query status updated successfully.',
-                'reload' => true
+                'reload' => true,
             ]);
         }
 
@@ -71,12 +74,15 @@ class ContactQueryController extends Controller
     public function respond(Request $request, ContactQuery $contactQuery)
     {
         $validated = $request->validate([
-            'response_notes' => 'nullable|string',
+            'admin_response' => 'nullable|string|max:5000',
         ]);
 
+        // "Responded" is stored as resolved; admin_response is the real
+        // column. A blank submission keeps any earlier notes.
         $contactQuery->update([
-            'status' => 'responded',
-            'response_notes' => $validated['response_notes'] ?? null,
+            'status' => 'resolved',
+            'admin_response' => $validated['admin_response'] ?? $contactQuery->admin_response,
+            'responded_by' => $request->user()->id,
             'responded_at' => now(),
         ]);
 
@@ -84,7 +90,7 @@ class ContactQueryController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Query marked as responded.',
-                'reload' => true
+                'reload' => true,
             ]);
         }
 
@@ -92,4 +98,3 @@ class ContactQueryController extends Controller
             ->with('success', 'Query marked as responded.');
     }
 }
-

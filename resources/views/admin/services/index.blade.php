@@ -78,7 +78,7 @@
                                 <td>
                                     <span class="badge bg-info">{{ $service->contracts_count }} contracts</span>
                                 </td>
-                                <td>{{ $service->order ?? $service->display_order ?? '-' }}</td>
+                                <td>{{ $service->order }}</td>
                                 <td>
                                     @if($service->is_active)
                                         <span class="badge bg-success">Active</span>

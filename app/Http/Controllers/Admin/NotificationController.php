@@ -38,27 +38,39 @@ class NotificationController extends Controller
     /**
      * Mark notification as read
      */
-    public function markRead(Notification $notification)
+    public function markRead(Request $request, Notification $notification)
     {
         $notification->markAsRead();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Notification marked as read.',
-        ]);
+        return $this->markedResponse($request, 'Notification marked as read.');
     }
 
     /**
      * Mark all notifications as read
      */
-    public function markAllRead()
+    public function markAllRead(Request $request)
     {
-        Notification::unread()->update(['is_read' => true]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'All notifications marked as read.',
+        // Same fields as markAsRead(), so "read" rows always carry read_at.
+        Notification::unread()->update([
+            'is_read' => true,
+            'read_at' => now(),
         ]);
+
+        return $this->markedResponse($request, 'All notifications marked as read.');
+    }
+
+    /**
+     * The notifications page posts plain forms; only script callers get JSON.
+     */
+    private function markedResponse(Request $request, string $message)
+    {
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+            ]);
+        }
+
+        return redirect()->back()->with('success', $message);
     }
 }
-

@@ -22,7 +22,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(SmsSender::class, function ($app) {
             return match (config('sms.driver', 'log')) {
                 'http' => new HttpSmsSender(config('sms.http', [])),
-                default => new LogSmsSender(),
+                default => new LogSmsSender,
             };
         });
 
@@ -31,8 +31,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(OtpNotifier::class, function ($app) {
             return match (config('otp.channel', 'mail')) {
                 'sms' => new SmsOtpNotifier($app->make(SmsSender::class)),
-                'log' => new LogOtpNotifier(),
-                default => new MailOtpNotifier(),
+                'log' => new LogOtpNotifier,
+                default => new MailOtpNotifier,
             };
         });
     }

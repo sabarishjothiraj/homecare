@@ -54,13 +54,7 @@
                         <div class="col-md-6">
                             <p class="mb-1"><strong>Status:</strong></p>
                             <p>
-                                @if($contactQuery->status === 'new')
-                                    <span class="badge bg-primary">New</span>
-                                @elseif($contactQuery->status === 'read')
-                                    <span class="badge bg-info">Read</span>
-                                @else
-                                    <span class="badge bg-success">Responded</span>
-                                @endif
+                                <span class="badge bg-{{ $contactQuery->statusTone() }}">{{ $contactQuery->statusLabel() }}</span>
                             </p>
                         </div>
                     </div>
@@ -79,11 +73,11 @@
                         </div>
                     </div>
 
-                    @if($contactQuery->response_notes)
+                    @if($contactQuery->admin_response)
                         <div class="mb-3">
                             <p class="mb-1"><strong>Response Notes:</strong></p>
                             <div class="bg-success bg-opacity-10 p-3 rounded">
-                                {{ $contactQuery->response_notes }}
+                                {{ $contactQuery->admin_response }}
                             </div>
                         </div>
                     @endif
@@ -92,6 +86,9 @@
                         <p class="small text-muted mb-0">
                             <i class="fas fa-check-circle text-success me-1"></i>
                             Responded on {{ $contactQuery->responded_at->format('M d, Y \a\t h:i A') }}
+                            @if($contactQuery->responder)
+                                by {{ $contactQuery->responder->name }}
+                            @endif
                         </p>
                     @endif
                 </div>
@@ -104,7 +101,7 @@
                     <h6 class="mb-0"><i class="fas fa-cog me-2"></i>Quick Actions</h6>
                 </div>
                 <div class="card-body">
-                    @if($contactQuery->status !== 'responded')
+                    @if(! in_array($contactQuery->status, ['resolved', 'closed'], true))
                         <button type="button" class="btn btn-success w-100 mb-2" data-bs-toggle="modal" data-bs-target="#respondModal">
                             <i class="fas fa-reply me-2"></i>Mark as Responded
                         </button>
@@ -116,9 +113,9 @@
                         <div class="mb-2">
                             <label class="form-label small">Change Status:</label>
                             <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
-                                <option value="new" {{ $contactQuery->status === 'new' ? 'selected' : '' }}>New</option>
-                                <option value="read" {{ $contactQuery->status === 'read' ? 'selected' : '' }}>Read</option>
-                                <option value="responded" {{ $contactQuery->status === 'responded' ? 'selected' : '' }}>Responded</option>
+                                @foreach(\App\Models\ContactQuery::STATUSES as $value => $status)
+                                    <option value="{{ $value }}" {{ $contactQuery->status === $value ? 'selected' : '' }}>{{ $status['label'] }}</option>
+                                @endforeach
                             </select>
                         </div>
                     </form>
@@ -163,8 +160,8 @@
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label for="response_notes" class="form-label">Response Notes (Optional)</label>
-                        <textarea class="form-control" id="response_notes" name="response_notes" rows="4" placeholder="Add any notes about how you responded..."></textarea>
+                        <label for="admin_response" class="form-label">Response Notes (Optional)</label>
+                        <textarea class="form-control" id="admin_response" name="admin_response" rows="4" maxlength="5000" placeholder="Add any notes about how you responded...">{{ old('admin_response') }}</textarea>
                     </div>
                 </div>
                 <div class="modal-footer">

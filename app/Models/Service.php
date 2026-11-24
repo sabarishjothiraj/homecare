@@ -32,6 +32,33 @@ class Service extends Model
     }
 
     /**
+     * Get contract lines for this service
+     */
+    public function contractItems()
+    {
+        return $this->hasMany(ContractItem::class);
+    }
+
+    /**
+     * Get assignments made for this service
+     */
+    public function assignments()
+    {
+        return $this->hasMany(Assignment::class);
+    }
+
+    /**
+     * Whether any contract still uses this service. contracts.service_id only
+     * holds a multi-line contract's first line; the others are on its items.
+     */
+    public function isInUse(): bool
+    {
+        return $this->contracts()->exists()
+            || $this->contractItems()->exists()
+            || $this->assignments()->exists();
+    }
+
+    /**
      * Get employees tagged for this service
      */
     public function employees()
@@ -52,7 +79,8 @@ class Service extends Model
      */
     public function scopeOrdered($query)
     {
-        return $query->orderBy('order');
+        // id breaks ties so equal orders list in a stable sequence.
+        return $query->orderBy('order')->orderBy('id');
     }
 
     /**
@@ -63,4 +91,3 @@ class Service extends Model
         return media_url($this->image);
     }
 }
-

@@ -27,7 +27,7 @@ class UpdateEmployeeRequest extends FormRequest
     {
         /** @var Employee|null $employee */
         $employee = $this->route('employee');
-        $hasExistingImage = !empty($employee?->field_data['employee_image_path']);
+        $hasExistingImage = ! empty($employee?->field_data['employee_image_path']);
 
         return [
             'first_name' => ['required', 'string', 'max:100'],
@@ -108,7 +108,7 @@ class UpdateEmployeeRequest extends FormRequest
         $experience = $this->input('experience', []);
 
         foreach ($experience as $index => $row) {
-            if (!is_array($row) || !$this->hasAnyRowValue($row, [
+            if (! is_array($row) || ! $this->hasAnyRowValue($row, [
                 'company_name', 'job_title', 'employment_type', 'start_date', 'end_date', 'currently_working', 'last_salary', 'reason_for_leaving', 'responsibilities',
             ])) {
                 continue;
@@ -122,12 +122,12 @@ class UpdateEmployeeRequest extends FormRequest
                 $validator->errors()->add("experience.$index.start_date", 'Start date is required when adding experience.');
             }
 
-            $currentlyWorking = !empty($row['currently_working']);
-            if (!$currentlyWorking && empty($row['end_date'])) {
+            $currentlyWorking = ! empty($row['currently_working']);
+            if (! $currentlyWorking && empty($row['end_date'])) {
                 $validator->errors()->add("experience.$index.end_date", 'End date is required unless currently working is selected.');
             }
 
-            if (!empty($row['start_date']) && !empty($row['end_date']) && $row['end_date'] < $row['start_date']) {
+            if (! empty($row['start_date']) && ! empty($row['end_date']) && $row['end_date'] < $row['start_date']) {
                 $validator->errors()->add("experience.$index.end_date", 'End date must be after or equal to start date.');
             }
         }
@@ -137,24 +137,30 @@ class UpdateEmployeeRequest extends FormRequest
     {
         $documents = $this->input('documents', []);
 
+        // existing_file only counts when it names one of this employee's own
+        // stored documents; the controller ignores any other path.
+        /** @var Employee|null $employee */
+        $employee = $this->route('employee');
+        $storedPaths = collect($employee?->uploadedDocuments() ?? [])->pluck('file_path')->filter()->all();
+
         foreach ($documents as $index => $row) {
-            if (!is_array($row)) {
+            if (! is_array($row)) {
                 continue;
             }
 
-            $hasType = !empty($row['type']);
+            $hasType = ! empty($row['type']);
             $hasFile = $this->hasFile("documents.$index.file");
-            $hasExistingFile = !empty($row['existing_file']);
+            $hasExistingFile = ! empty($row['existing_file']) && in_array($row['existing_file'], $storedPaths, true);
 
-            if (!$hasType && !$hasFile && !$hasExistingFile) {
+            if (! $hasType && ! $hasFile && empty($row['existing_file'])) {
                 continue;
             }
 
-            if (!$hasType) {
+            if (! $hasType) {
                 $validator->errors()->add("documents.$index.type", 'Document type is required when adding a document row.');
             }
 
-            if (!$hasFile && !$hasExistingFile) {
+            if (! $hasFile && ! $hasExistingFile) {
                 $validator->errors()->add("documents.$index.file", 'Document file is required when a document type is selected.');
             }
         }
@@ -164,9 +170,10 @@ class UpdateEmployeeRequest extends FormRequest
     {
         foreach ($keys as $key) {
             if ($key === 'currently_working') {
-                if (!empty($row[$key])) {
+                if (! empty($row[$key])) {
                     return true;
                 }
+
                 continue;
             }
 

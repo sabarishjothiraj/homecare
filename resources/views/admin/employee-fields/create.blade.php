@@ -116,7 +116,7 @@
                             <!-- Checkboxes -->
                             <div class="col-12">
                                 <div class="form-check mb-2">
-                                    <input class="form-check-input" type="checkbox" id="is_required" name="is_required" {{ old('is_required') ? 'checked' : '' }}>
+                                    <input class="form-check-input" type="checkbox" id="is_required" name="is_required" value="1" {{ old('is_required') ? 'checked' : '' }}>
                                     <label class="form-check-label" for="is_required">
                                         <strong>Required Field</strong>
                                         <small class="text-muted d-block">Field must be filled</small>
@@ -124,7 +124,7 @@
                                 </div>
 
                                 <div class="form-check mb-2">
-                                    <input class="form-check-input" type="checkbox" id="is_document" name="is_document" {{ old('is_document') ? 'checked' : '' }}>
+                                    <input class="form-check-input" type="checkbox" id="is_document" name="is_document" value="1" {{ old('is_document') ? 'checked' : '' }}>
                                     <label class="form-check-label" for="is_document">
                                         <strong>Document Field</strong>
                                         <small class="text-muted d-block">Field stores uploaded documents</small>
@@ -132,7 +132,7 @@
                                 </div>
 
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="is_active" name="is_active" {{ old('is_active', true) ? 'checked' : '' }}>
+                                    <input class="form-check-input" type="checkbox" id="is_active" name="is_active" value="1" {{ old('is_active', true) ? 'checked' : '' }}>
                                     <label class="form-check-label" for="is_active">
                                         <strong>Active</strong>
                                         <small class="text-muted d-block">Field is visible in forms</small>

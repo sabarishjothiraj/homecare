@@ -62,9 +62,10 @@
                 <div class="row">
                     <div class="col-md-6 mb-3">
                         <label for="link" class="form-label">Link URL</label>
-                        <input type="url" class="form-control @error('link') is-invalid @enderror"
+                        <input type="text" class="form-control @error('link') is-invalid @enderror"
                                id="link" name="link" value="{{ old('link') }}"
-                               placeholder="https://example.com" maxlength="255">
+                               placeholder="/services or https://example.com" maxlength="255">
+                        <small class="text-muted">A page on this site (e.g. /services) or a full http(s) URL</small>
                         @error('link')
                         <div class="invalid-feedback">{{ $message }}</div>
                         @enderror

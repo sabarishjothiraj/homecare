@@ -152,19 +152,10 @@
                                     <tr>
                                         <td>{{ $contract->service->name ?? 'N/A' }}</td>
                                         <td>{{ $contract->start_date->format('M d, Y') }}</td>
-                                        <td>{{ $contract->end_date->format('M d, Y') }}</td>
-                                        <td>₹{{ number_format($contract->total_amount, 0) }}</td>
-                                        <td>
-                                            @if($contract->status === 'active')
-                                                <span class="badge bg-success">Active</span>
-                                            @elseif($contract->status === 'pending')
-                                                <span class="badge bg-warning">Pending</span>
-                                            @elseif($contract->status === 'completed')
-                                                <span class="badge bg-info">Completed</span>
-                                            @else
-                                                <span class="badge bg-secondary">{{ ucfirst($contract->status) }}</span>
-                                            @endif
-                                        </td>
+                                        {{-- Custom-duration contracts can be saved without an end date. --}}
+                                        <td>{{ $contract->end_date?->format('M d, Y') ?? 'Open-ended' }}</td>
+                                        <td>₹{{ number_format((float) $contract->amount, 0) }}</td>
+                                        <td>{!! contract_status_badge($contract->status) !!}</td>
                                         <td>
                                             <a href="{{ route('admin.contracts.show', $contract) }}" class="btn btn-sm btn-outline-primary">
                                                 <i class="fas fa-eye"></i>

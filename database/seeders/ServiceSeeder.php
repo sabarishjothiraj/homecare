@@ -63,9 +63,10 @@ class ServiceSeeder extends Seeder
             ],
         ];
 
+        // firstOrCreate so a re-run neither duplicates nor overwrites edits;
+        // withTrashed so a service the office deleted is not brought back.
         foreach ($services as $service) {
-            Service::create($service);
+            Service::withTrashed()->firstOrCreate(['name' => $service['name']], $service);
         }
     }
 }
-
